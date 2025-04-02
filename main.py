@@ -934,16 +934,8 @@ async def on_ready():
                         break
 
                 if not has_ticket_message:
-                    print("Aucun message de ticket trouvé, création d'un nouveau message...")
-                    try:
-                        view = TicketView()
-                        await support_channel.send(
-                            "📝 **Choisis une catégorie pour ton ticket :**", view=view)
-                        print(f"Message de ticket créé avec succès dans {guild.name}")
-                    except Exception as e:
-                        print(f"Erreur lors de la création du message de ticket dans {guild.name}: {e}")
-                        import traceback
-                        traceback.print_exc()
+                    print(f"Aucun message de ticket trouvé dans {guild.name}.")
+                    print(f"Utilisez la commande !ticket ou !setuptickets pour créer un message de ticket.")
             except Exception as e:
                 print(f"Erreur lors de la recherche des messages de ticket dans {guild.name}: {e}")
                 import traceback
@@ -1241,6 +1233,7 @@ async def commands(ctx):
 
 @bot.command()
 async def ticket(ctx):
+    """Crée un message de création de ticket dans le canal ticket-support."""
     role = discord.utils.get(ctx.author.roles, id=ADMIN_ROLE_ID)
     if role is None:
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
@@ -1260,6 +1253,39 @@ async def ticket(ctx):
     await ctx.send(
         f"✅ Message de création de ticket ajouté dans {support_channel.mention}"
     )
+
+@bot.command()
+async def resetticket(ctx):
+    """Supprime tous les messages de ticket existants et en crée un nouveau."""
+    role = discord.utils.get(ctx.author.roles, id=ADMIN_ROLE_ID)
+    if role is None:
+        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
+        return
+
+    support_channel = discord.utils.get(ctx.guild.text_channels,
+                                      name="ticket-support")
+    if not support_channel:
+        await ctx.send(
+            "❌ Aucun canal 'ticket-support' trouvé. Créez ce canal avant d'utiliser cette commande."
+        )
+        return
+
+    # Supprimer les anciens messages de ticket
+    deleted_count = 0
+    async for message in support_channel.history(limit=100):
+        if message.author == bot.user and "Choisis une catégorie pour ton ticket" in message.content:
+            await message.delete()
+            deleted_count += 1
+
+    # Créer un nouveau message
+    view = TicketView()
+    await support_channel.send("📝 **Choisis une catégorie pour ton ticket :**",
+                              view=view)
+
+    if deleted_count > 0:
+        await ctx.send(f"✅ {deleted_count} ancien(s) message(s) de ticket supprimé(s) et un nouveau message créé dans {support_channel.mention}")
+    else:
+        await ctx.send(f"✅ Nouveau message de ticket créé dans {support_channel.mention}")
 
 @bot.command()
 async def giveaway(ctx, time: int, *, prize: str):
@@ -1795,8 +1821,15 @@ async def setup_tickets(ctx):
         except Exception as e:
             await ctx.send(f"❌ Erreur lors de la création du canal de logs: {e}")
 
-    # Créer un message dans le canal de support
-    if created_categories or not discord.utils.get(support_channel.history(limit=1)):
+    # Vérifier s'il faut créer un message dans le canal de support
+    has_ticket_message = False
+    async for message in support_channel.history(limit=100):
+        if message.author == bot.user and "Choisis une catégorie pour ton ticket" in message.content:
+            has_ticket_message = True
+            break
+
+    # Créer un message seulement s'il n'y en a pas déjà un
+    if not has_ticket_message:
         view = TicketView()
         await support_channel.send("📝 **Choisis une catégorie pour ton ticket :**", view=view)
 
@@ -1808,59 +1841,8 @@ async def setup_tickets(ctx):
 
     await ctx.send("✅ Configuration des tickets terminée.")
 
-# Commande pour créer les catégories manquantes (déjà définie plus haut)
-# @bot.command(name="setuptickets")  # Commenté pour éviter les doublons
-async def setup_tickets_duplicate(ctx):
-    """Crée les catégories et canaux nécessaires pour le système de tickets."""
-    if not ctx.author.guild_permissions.administrator:
-        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
-        return
-
-    # Créer les catégories si elles n'existent pas
-    categories = ["📌 Candidatures", "❓ Aide", "🚫 Débannissement", "🤝 Partenariats"]
-    created_categories = []
-
-    for cat_name in categories:
-        category = discord.utils.get(ctx.guild.categories, name=cat_name)
-        if not category:
-            try:
-                category = await ctx.guild.create_category(cat_name)
-                created_categories.append(cat_name)
-            except Exception as e:
-                await ctx.send(f"❌ Erreur lors de la création de la catégorie {cat_name}: {e}")
-                return
-
-    # Créer le canal de support s'il n'existe pas
-    support_channel = discord.utils.get(ctx.guild.text_channels, name="ticket-support")
-    if not support_channel:
-        try:
-            support_channel = await ctx.guild.create_text_channel("ticket-support")
-            await ctx.send(f"✅ Canal {support_channel.mention} créé.")
-        except Exception as e:
-            await ctx.send(f"❌ Erreur lors de la création du canal ticket-support: {e}")
-            return
-
-    # Créer le canal de logs s'il n'existe pas
-    log_channel = discord.utils.get(ctx.guild.text_channels, id=LOG_TICKET_ID)
-    if not log_channel:
-        try:
-            log_channel = await ctx.guild.create_text_channel("logs-tickets")
-            await ctx.send(f"✅ Canal de logs {log_channel.mention} créé. N'oublie pas de mettre à jour la variable LOG_TICKET_ID dans le code avec l'ID: {log_channel.id}")
-        except Exception as e:
-            await ctx.send(f"❌ Erreur lors de la création du canal de logs: {e}")
-
-    # Créer un message dans le canal de support
-    if created_categories or not discord.utils.get(support_channel.history(limit=1)):
-        view = TicketView()
-        await support_channel.send("📝 **Choisis une catégorie pour ton ticket :**", view=view)
-
-    # Message de confirmation
-    if created_categories:
-        await ctx.send(f"✅ Catégories créées: {', '.join(created_categories)}")
-    else:
-        await ctx.send("✅ Toutes les catégories existent déjà.")
-
-    await ctx.send("✅ Configuration des tickets terminée.")
+# La fonction setup_tickets_duplicate a été supprimée car elle était une duplication
+# de la commande setuptickets définie plus haut
 
 
 

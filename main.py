@@ -12,13 +12,13 @@ intents.message_content = True
 intents.reactions = True
 intents.members = True
 
-#IDs des canaux et rôles
-LOG_CHANNEL_ID = 1353829275857588225
-LOG_TICKET_ID = 1353829275857588224
-MUTE_ROLE_ID = 1353829274376868011
-ADMIN_ROLE_ID = 1353829274397704222
-ROLE_JOIN_ID = 1353829274389581846
-GIVEAWAY_WINNER_ROLE_ID = 1353829274389581845
+# IDs des canaux et rôles
+LOG_CHANNEL_ID = 1331393513903886429
+LOG_TICKET_ID = 1333434654493249587
+MUTE_ROLE_ID = 1350466883295641600
+ADMIN_ROLE_ID = 1331397374509060258
+ROLE_JOIN_ID = 1351476247904911421
+GIVEAWAY_WINNER_ROLE_ID = 1350262712696967199
 
 # Liste des mots interdits
 MOTS_INTERDITS = [
@@ -117,6 +117,12 @@ class TicketView(discord.ui.View):
                       custom_id="ticket_category_deban")
     async def ticket_button_deban(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.create_ticket(interaction, "🚫 Débannissement")
+        
+    @discord.ui.button(label="🤝 Candidature partenaire",
+                      style=discord.ButtonStyle.primary,
+                      custom_id="ticket_category_partner")
+    async def ticket_button_partner(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.create_ticket(interaction, "🤝 Partenariats")
 
     async def create_ticket(self, interaction: discord.Interaction,
                            category_name: str):

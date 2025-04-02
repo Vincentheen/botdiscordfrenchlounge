@@ -1989,20 +1989,34 @@ class ReglementVerificationView(discord.ui.View):
                       custom_id="reglement_verification_button")
     async def verify_button(self, button, interaction):
         print(f"=== Bouton de vérification règlement cliqué ===")
-        print(f"Utilisateur: {interaction.user.name} (ID: {interaction.user.id})")
+        print(f"Type du premier paramètre: {type(button)}")
+        print(f"Type du deuxième paramètre: {type(interaction)}")
+
+        # Déterminer quel paramètre est l'interaction
+        if isinstance(button, discord.Interaction):
+            real_interaction = button
+            print(f"L'interaction est le premier paramètre")
+        elif isinstance(interaction, discord.Interaction):
+            real_interaction = interaction
+            print(f"L'interaction est le deuxième paramètre")
+        else:
+            print(f"Aucun paramètre n'est une interaction valide")
+            return
+
+        print(f"Utilisateur: {real_interaction.user.name} (ID: {real_interaction.user.id})")
 
         try:
             # Attribuer le rôle membre (ID spécifique: 1354904148570542273)
-            print(f"Recherche du rôle membre (ID: 1354904148570542273) dans le serveur {interaction.guild.name}")
-            role = discord.utils.get(interaction.guild.roles, id=1354904148570542273)
+            print(f"Recherche du rôle membre (ID: 1354904148570542273) dans le serveur {real_interaction.guild.name}")
+            role = discord.utils.get(real_interaction.guild.roles, id=1354904148570542273)
 
             if not role:
-                print(f"❌ Rôle membre introuvable dans le serveur {interaction.guild.name}")
+                print(f"❌ Rôle membre introuvable dans le serveur {real_interaction.guild.name}")
                 # Afficher tous les rôles disponibles pour le débogage
-                available_roles = [f"{r.name} (ID: {r.id})" for r in interaction.guild.roles]
+                available_roles = [f"{r.name} (ID: {r.id})" for r in real_interaction.guild.roles]
                 print(f"Rôles disponibles: {', '.join(available_roles)}")
 
-                await interaction.response.send_message(
+                await real_interaction.response.send_message(
                     "❌ Le rôle membre est introuvable. Contacte un administrateur.",
                     ephemeral=True
                 )
@@ -2011,38 +2025,38 @@ class ReglementVerificationView(discord.ui.View):
             print(f"✅ Rôle membre trouvé: {role.name} (ID: {role.id})")
 
             # Vérifier la hiérarchie des rôles
-            bot_member = interaction.guild.get_member(interaction.client.user.id)
+            bot_member = real_interaction.guild.get_member(real_interaction.client.user.id)
             if bot_member.top_role.position <= role.position:
-                await interaction.response.send_message(
+                await real_interaction.response.send_message(
                     "❌ Je n'ai pas la permission d'attribuer ce rôle. Contacte un administrateur.",
                     ephemeral=True
                 )
                 return
 
             # Attribuer le rôle
-            await interaction.user.add_roles(role)
+            await real_interaction.user.add_roles(role)
 
             # Confirmer à l'utilisateur
-            await interaction.response.send_message(
+            await real_interaction.response.send_message(
                 f"✅ Merci d'avoir accepté le règlement ! Tu as maintenant accès au serveur.",
                 ephemeral=True
             )
 
             # Log de l'action
-            log_channel = interaction.guild.get_channel(LOG_CHANNEL_ID)
+            log_channel = real_interaction.guild.get_channel(LOG_CHANNEL_ID)
             if log_channel:
                 await log_channel.send(
-                    f"✅ **Vérification par règlement** : {interaction.user.mention} a accepté le règlement et a reçu le rôle {role.mention}."
+                    f"✅ **Vérification par règlement** : {real_interaction.user.mention} a accepté le règlement et a reçu le rôle {role.mention}."
                 )
 
         except discord.Forbidden:
-            await interaction.response.send_message(
+            await real_interaction.response.send_message(
                 "❌ Je n'ai pas la permission d'attribuer ce rôle. Contacte un administrateur.",
                 ephemeral=True
             )
         except Exception as e:
             print(f"Erreur lors de la vérification par règlement: {e}")
-            await interaction.response.send_message(
+            await real_interaction.response.send_message(
                 "❌ Une erreur s'est produite. Contacte un administrateur.",
                 ephemeral=True
             )

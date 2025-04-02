@@ -381,6 +381,34 @@ class TicketView(discord.ui.View):
             import traceback
             traceback.print_exc()
 
+    @discord.ui.button(label="⚠️ Plainte staff",
+                      style=discord.ButtonStyle.danger,
+                      custom_id="ticket_category_complaint")
+    async def ticket_button_complaint(self, button, interaction):
+        print(f"=== Bouton plainte staff cliqué ===")
+        print(f"Type du premier paramètre: {type(button)}")
+        print(f"Type du deuxième paramètre: {type(interaction)}")
+
+        # Déterminer quel paramètre est l'interaction
+        if isinstance(button, discord.Interaction):
+            real_interaction = button
+            print(f"L'interaction est le premier paramètre")
+        elif isinstance(interaction, discord.Interaction):
+            real_interaction = interaction
+            print(f"L'interaction est le deuxième paramètre")
+        else:
+            print(f"Aucun paramètre n'est une interaction valide")
+            return
+
+        print(f"Utilisateur: {real_interaction.user.name if hasattr(real_interaction, 'user') and real_interaction.user else 'Non disponible'}")
+
+        try:
+            await self.create_ticket(real_interaction, "⚠️ Plaintes Staff")
+        except Exception as e:
+            print(f"Erreur détaillée dans ticket_button_complaint: {e}")
+            import traceback
+            traceback.print_exc()
+
     async def create_ticket(self, interaction, category_name: str):
         print(f"\n=== Création de ticket demandée ===")
         print(f"Catégorie: {category_name}")
@@ -811,7 +839,7 @@ async def on_ready():
         print(f"\n=== Vérification du serveur: {guild.name} (ID: {guild.id}) ===")
 
         # Vérifier les catégories
-        categories = ["📌 Candidatures", "❓ Aide", "🚫 Débannissement", "🤝 Partenariats"]
+        categories = ["📌 Candidatures", "❓ Aide", "🚫 Débannissement", "🤝 Partenariats", "⚠️ Plaintes Staff"]
         for cat_name in categories:
             category = discord.utils.get(guild.categories, name=cat_name)
             print(f"  Catégorie '{cat_name}': {'✅ Trouvée' if category else '❌ MANQUANTE'}")
@@ -1758,7 +1786,7 @@ async def setup_tickets(ctx):
         return
 
     # Créer les catégories si elles n'existent pas
-    categories = ["📌 Candidatures", "❓ Aide", "🚫 Débannissement", "🤝 Partenariats"]
+    categories = ["📌 Candidatures", "❓ Aide", "🚫 Débannissement", "🤝 Partenariats", "⚠️ Plaintes Staff"]
     created_categories = []
 
     for cat_name in categories:

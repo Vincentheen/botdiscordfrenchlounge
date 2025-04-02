@@ -1254,38 +1254,7 @@ async def ticket(ctx):
         f"✅ Message de création de ticket ajouté dans {support_channel.mention}"
     )
 
-@bot.command()
-async def resetticket(ctx):
-    """Supprime tous les messages de ticket existants et en crée un nouveau."""
-    role = discord.utils.get(ctx.author.roles, id=ADMIN_ROLE_ID)
-    if role is None:
-        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
-        return
-
-    support_channel = discord.utils.get(ctx.guild.text_channels,
-                                      name="ticket-support")
-    if not support_channel:
-        await ctx.send(
-            "❌ Aucun canal 'ticket-support' trouvé. Créez ce canal avant d'utiliser cette commande."
-        )
-        return
-
-    # Supprimer les anciens messages de ticket
-    deleted_count = 0
-    async for message in support_channel.history(limit=100):
-        if message.author == bot.user and "Choisis une catégorie pour ton ticket" in message.content:
-            await message.delete()
-            deleted_count += 1
-
-    # Créer un nouveau message
-    view = TicketView()
-    await support_channel.send("📝 **Choisis une catégorie pour ton ticket :**",
-                              view=view)
-
-    if deleted_count > 0:
-        await ctx.send(f"✅ {deleted_count} ancien(s) message(s) de ticket supprimé(s) et un nouveau message créé dans {support_channel.mention}")
-    else:
-        await ctx.send(f"✅ Nouveau message de ticket créé dans {support_channel.mention}")
+# La commande resetticket a été supprimée ici car elle est déjà définie plus loin dans le code (ligne ~1758)
 
 @bot.command()
 async def giveaway(ctx, time: int, *, prize: str):

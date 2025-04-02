@@ -381,7 +381,7 @@ class TicketView(discord.ui.View):
             import traceback
             traceback.print_exc()
 
-    @discord.ui.button(label="⚠️ Plainte staff",
+    @discord.ui.button(label="🚨 Plainte staff",
                       style=discord.ButtonStyle.danger,
                       custom_id="ticket_category_complaint")
     async def ticket_button_complaint(self, button, interaction):
@@ -403,7 +403,7 @@ class TicketView(discord.ui.View):
         print(f"Utilisateur: {real_interaction.user.name if hasattr(real_interaction, 'user') and real_interaction.user else 'Non disponible'}")
 
         try:
-            await self.create_ticket(real_interaction, "⚠️ Plaintes Staff")
+            await self.create_ticket(real_interaction, "🚨 Plainte Staff")
         except Exception as e:
             print(f"Erreur détaillée dans ticket_button_complaint: {e}")
             import traceback
@@ -839,7 +839,7 @@ async def on_ready():
         print(f"\n=== Vérification du serveur: {guild.name} (ID: {guild.id}) ===")
 
         # Vérifier les catégories
-        categories = ["📌 Candidatures", "❓ Aide", "🚫 Débannissement", "🤝 Partenariats", "⚠️ Plaintes Staff"]
+        categories = ["📌 Candidatures", "❓ Aide", "🚫 Débannissement", "🤝 Partenariats", "🚨 Plainte Staff"]
         for cat_name in categories:
             category = discord.utils.get(guild.categories, name=cat_name)
             print(f"  Catégorie '{cat_name}': {'✅ Trouvée' if category else '❌ MANQUANTE'}")
@@ -1786,7 +1786,7 @@ async def setup_tickets(ctx):
         return
 
     # Créer les catégories si elles n'existent pas
-    categories = ["📌 Candidatures", "❓ Aide", "🚫 Débannissement", "🤝 Partenariats", "⚠️ Plaintes Staff"]
+    categories = ["📌 Candidatures", "❓ Aide", "🚫 Débannissement", "🤝 Partenariats", "🚨 Plainte Staff"]
     created_categories = []
 
     for cat_name in categories:

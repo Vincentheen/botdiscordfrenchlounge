@@ -3,6 +3,7 @@ from discord.ext import commands
 import random
 import asyncio
 import os
+import datetime
 from keep_alive import keep_alive
 import json
 
@@ -2322,6 +2323,206 @@ async def update_reglement_on_startup():
     if reglement["channel_id"] and reglement["rules"]:
         for guild in bot.guilds:
             await update_reglement_message(guild)
+
+# Événements pour les logs supplémentaires
+
+# Log des entrées/sorties dans les canaux vocaux
+@bot.event
+async def on_voice_state_update(member, before, after):
+    # Ignorer les bots
+    if member.bot:
+        return
+
+    # Récupérer le canal de logs
+    log_channel = bot.get_channel(LOG_CHANNEL_ID)
+    if not log_channel:
+        return
+
+    # Création d'un embed pour le log
+    embed = discord.Embed(
+        title="🔊 Activité Vocale",
+        color=0x3498db,
+        timestamp=datetime.datetime.now()
+    )
+    embed.set_author(name=f"{member.name}#{member.discriminator}", icon_url=member.avatar.url if member.avatar else None)
+    embed.set_footer(text=f"ID Utilisateur: {member.id}")
+
+    # Cas 1: L'utilisateur a rejoint un canal vocal
+    if before.channel is None and after.channel is not None:
+        embed.description = f"**{member.mention} a rejoint le canal vocal {after.channel.mention}**"
+        embed.color = 0x2ecc71  # Vert
+
+    # Cas 2: L'utilisateur a quitté un canal vocal
+    elif before.channel is not None and after.channel is None:
+        embed.description = f"**{member.mention} a quitté le canal vocal {before.channel.mention}**"
+        embed.color = 0xe74c3c  # Rouge
+
+    # Cas 3: L'utilisateur a changé de canal vocal
+    elif before.channel != after.channel:
+        embed.description = f"**{member.mention} a changé de canal vocal**\n📤 De: {before.channel.mention}\n📥 À: {after.channel.mention}"
+        embed.color = 0xf1c40f  # Jaune
+
+    # Cas 4: L'utilisateur a modifié son état dans le même canal (muet, sourdine, etc.)
+    else:
+        changes = []
+
+        # Vérifier les changements d'état
+        if before.deaf != after.deaf:
+            changes.append(f"**Sourdine serveur**: {'Activée ✅' if after.deaf else 'Désactivée ❌'}")
+
+        if before.mute != after.mute:
+            changes.append(f"**Muet serveur**: {'Activé ✅' if after.mute else 'Désactivé ❌'}")
+
+        if before.self_deaf != after.self_deaf:
+            changes.append(f"**Sourdine personnelle**: {'Activée ✅' if after.self_deaf else 'Désactivée ❌'}")
+
+        if before.self_mute != after.self_mute:
+            changes.append(f"**Muet personnel**: {'Activé ✅' if after.self_mute else 'Désactivé ❌'}")
+
+        if before.self_stream != after.self_stream:
+            changes.append(f"**Partage d'écran**: {'Démarré ✅' if after.self_stream else 'Arrêté ❌'}")
+
+        if before.self_video != after.self_video:
+            changes.append(f"**Caméra**: {'Activée ✅' if after.self_video else 'Désactivée ❌'}")
+
+        # S'il y a des changements, les afficher
+        if changes:
+            embed.description = f"**{member.mention} a modifié son état dans {after.channel.mention}**"
+            embed.add_field(name="Changements", value="\n".join(changes), inline=False)
+            embed.color = 0x9b59b6  # Violet
+        else:
+            # Aucun changement significatif, ne pas envoyer de log
+            return
+
+    # Envoyer l'embed dans le canal de logs
+    await log_channel.send(embed=embed)
+
+# Log des modifications de rôles des utilisateurs
+@bot.event
+async def on_member_update(before, after):
+    # Ignorer les bots
+    if before.bot:
+        return
+
+    # Récupérer le canal de logs
+    log_channel = bot.get_channel(LOG_CHANNEL_ID)
+    if not log_channel:
+        return
+
+    # Vérifier si les rôles ont changé
+    if before.roles != after.roles:
+        # Créer un embed pour le log
+        embed = discord.Embed(
+            title="👤 Modification de Rôles",
+            description=f"Les rôles de {after.mention} ont été modifiés",
+            color=0x3498db,
+            timestamp=datetime.datetime.now()
+        )
+        embed.set_author(name=f"{after.name}#{after.discriminator}", icon_url=after.avatar.url if after.avatar else None)
+        embed.set_footer(text=f"ID Utilisateur: {after.id}")
+
+        # Trouver les rôles ajoutés
+        roles_added = [role for role in after.roles if role not in before.roles]
+        if roles_added:
+            embed.add_field(
+                name="✅ Rôles Ajoutés",
+                value="\n".join([f"{role.mention} (`{role.id}`)" for role in roles_added]),
+                inline=False
+            )
+
+        # Trouver les rôles retirés
+        roles_removed = [role for role in before.roles if role not in after.roles]
+        if roles_removed:
+            embed.add_field(
+                name="❌ Rôles Retirés",
+                value="\n".join([f"{role.mention} (`{role.id}`)" for role in roles_removed]),
+                inline=False
+            )
+
+        # Envoyer l'embed dans le canal de logs
+        await log_channel.send(embed=embed)
+
+    # Vérifier si le surnom a changé
+    if before.nick != after.nick:
+        embed = discord.Embed(
+            title="👤 Modification de Surnom",
+            color=0x3498db,
+            timestamp=datetime.datetime.now()
+        )
+        embed.set_author(name=f"{after.name}#{after.discriminator}", icon_url=after.avatar.url if after.avatar else None)
+        embed.set_footer(text=f"ID Utilisateur: {after.id}")
+
+        # Afficher l'ancien et le nouveau surnom
+        embed.add_field(name="Ancien surnom", value=before.nick or "*Aucun surnom*", inline=True)
+        embed.add_field(name="Nouveau surnom", value=after.nick or "*Aucun surnom*", inline=True)
+
+        # Envoyer l'embed dans le canal de logs
+        await log_channel.send(embed=embed)
+
+# Log des changements sur le serveur
+@bot.event
+async def on_guild_update(before, after):
+    # Récupérer le canal de logs
+    log_channel = bot.get_channel(LOG_CHANNEL_ID)
+    if not log_channel:
+        return
+
+    changes = []
+
+    # Vérifier les changements du serveur
+    if before.name != after.name:
+        changes.append(f"**Nom du serveur**: `{before.name}` → `{after.name}`")
+
+    if before.description != after.description:
+        changes.append(f"**Description**: `{before.description or 'Aucune'}` → `{after.description or 'Aucune'}`")
+
+    if before.region != after.region:
+        changes.append(f"**Région**: `{before.region}` → `{after.region}`")
+
+    if before.owner_id != after.owner_id:
+        changes.append(f"**Propriétaire**: <@{before.owner_id}> → <@{after.owner_id}>")
+
+    if before.afk_timeout != after.afk_timeout:
+        changes.append(f"**Délai AFK**: `{before.afk_timeout} secondes` → `{after.afk_timeout} secondes`")
+
+    if before.afk_channel != after.afk_channel:
+        before_afk = before.afk_channel.mention if before.afk_channel else "Aucun"
+        after_afk = after.afk_channel.mention if after.afk_channel else "Aucun"
+        changes.append(f"**Canal AFK**: {before_afk} → {after_afk}")
+
+    if before.verification_level != after.verification_level:
+        changes.append(f"**Niveau de vérification**: `{before.verification_level}` → `{after.verification_level}`")
+
+    if before.explicit_content_filter != after.explicit_content_filter:
+        changes.append(f"**Filtre de contenu explicite**: `{before.explicit_content_filter}` → `{after.explicit_content_filter}`")
+
+    if before.default_notifications != after.default_notifications:
+        changes.append(f"**Notifications par défaut**: `{before.default_notifications}` → `{after.default_notifications}`")
+
+    if before.system_channel != after.system_channel:
+        before_system = before.system_channel.mention if before.system_channel else "Aucun"
+        after_system = after.system_channel.mention if after.system_channel else "Aucun"
+        changes.append(f"**Canal système**: {before_system} → {after_system}")
+
+    if before.premium_tier != after.premium_tier:
+        changes.append(f"**Niveau de boost**: `{before.premium_tier}` → `{after.premium_tier}`")
+
+    if before.premium_subscription_count != after.premium_subscription_count:
+        changes.append(f"**Nombre de boosts**: `{before.premium_subscription_count}` → `{after.premium_subscription_count}`")
+
+    # Si des changements ont été détectés, créer et envoyer un embed
+    if changes:
+        embed = discord.Embed(
+            title="🔧 Modification du Serveur",
+            description="\n".join(changes),
+            color=0xf1c40f,
+            timestamp=datetime.datetime.now()
+        )
+        embed.set_author(name=after.name, icon_url=after.icon.url if after.icon else None)
+        embed.set_footer(text=f"ID Serveur: {after.id}")
+
+        # Envoyer l'embed dans le canal de logs
+        await log_channel.send(embed=embed)
 
 # Lancement du bot
 keep_alive()

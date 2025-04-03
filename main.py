@@ -1480,9 +1480,20 @@ async def ticket(ctx):
 # La commande resetticket a été supprimée ici car elle est déjà définie plus loin dans le code (ligne ~1758)
 
 @bot.command()
-async def giveaway(ctx, time: int, *, prize: str):
-    role = discord.utils.get(ctx.author.roles, id=ADMIN_ROLE_ID)
-    if role is None:
+async def giveaway(ctx, time_or_members: str, *, prize: str):
+    """
+    Crée un giveaway qui se termine après un temps défini ou lorsqu'un nombre de membres est atteint.
+
+    Usage:
+    !giveaway 60 Un rôle VIP pendant 1 semaine  # Se termine après 60 secondes
+    !giveaway m:100 Un rôle VIP  # Se termine quand le serveur atteint 100 membres
+    """
+    # Vérifier les permissions
+    guild_id = ctx.guild.id
+    admin_role_id = get_config(guild_id, 'ADMIN_ROLE_ID')
+    role = discord.utils.get(ctx.author.roles, id=admin_role_id)
+
+    if role is None and not ctx.author.guild_permissions.administrator:
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
 
@@ -1491,46 +1502,129 @@ async def giveaway(ctx, time: int, *, prize: str):
         await ctx.send("❌ Un giveaway est déjà en cours !")
         return
 
-    giveaway_msg = await ctx.send(f"🎉 **GIVEAWAY** 🎉\n"
-                                  f"🏆 Prix : {prize}\n"
-                                  f"🕒 Temps restant : {time} secondes.\n"
-                                  f"Réagis avec 🎉 pour participer !")
+    # Déterminer si c'est un giveaway basé sur le temps ou sur le nombre de membres
+    is_member_based = False
+    target_members = 0
+    time_seconds = 0
+
+    if time_or_members.lower().startswith('m:'):
+        # Giveaway basé sur le nombre de membres
+        try:
+            target_members = int(time_or_members[2:])
+            is_member_based = True
+
+            # Vérifier si le nombre cible est valide
+            current_members = ctx.guild.member_count
+            if target_members <= current_members:
+                await ctx.send(f"❌ Le nombre cible de membres ({target_members}) doit être supérieur au nombre actuel de membres ({current_members}).")
+                return
+
+            # Définir un temps maximum par défaut (7 jours) pour éviter un giveaway infini
+            time_seconds = 7 * 24 * 60 * 60  # 7 jours en secondes
+
+        except ValueError:
+            await ctx.send("❌ Format invalide. Utilisez `m:nombre` pour spécifier un nombre de membres cible.")
+            return
+    else:
+        # Giveaway basé sur le temps
+        try:
+            time_seconds = int(time_or_members)
+            if time_seconds <= 0:
+                await ctx.send("❌ Le temps doit être supérieur à 0 secondes.")
+                return
+        except ValueError:
+            await ctx.send("❌ Format invalide. Utilisez un nombre de secondes ou `m:nombre` pour spécifier un nombre de membres cible.")
+            return
+
+    # Créer le message initial du giveaway
+    if is_member_based:
+        current_members = ctx.guild.member_count
+        giveaway_msg = await ctx.send(f"🎉 **GIVEAWAY** 🎉\n"
+                                      f"🏆 Prix : {prize}\n"
+                                      f"👥 Se terminera quand le serveur atteindra **{target_members}** membres (actuellement {current_members}).\n"
+                                      f"🕒 Ou dans {time_seconds} secondes maximum.\n"
+                                      f"Réagis avec 🎉 pour participer !")
+    else:
+        giveaway_msg = await ctx.send(f"🎉 **GIVEAWAY** 🎉\n"
+                                      f"🏆 Prix : {prize}\n"
+                                      f"🕒 Temps restant : {time_seconds} secondes.\n"
+                                      f"Réagis avec 🎉 pour participer !")
 
     await giveaway_msg.add_reaction("🎉")
 
     # Stocker les informations du giveaway avec l'ID du message comme clé
     giveaways[giveaway_msg.id] = {
         "prize": prize,
-        "time": time,
+        "time": time_seconds,
         "message": giveaway_msg,
-        "participants": set()
+        "participants": set(),
+        "is_member_based": is_member_based,
+        "target_members": target_members,
+        "start_time": datetime.datetime.now()
     }
 
     # Compte à rebours du giveaway
-    remaining_time = time
+    remaining_time = time_seconds
     while remaining_time > 0:
+        # Vérifier si le giveaway a été supprimé manuellement
+        if giveaway_msg.id not in giveaways:
+            return
+
+        # Vérifier si le nombre de membres cible a été atteint (pour les giveaways basés sur les membres)
+        if is_member_based and ctx.guild.member_count >= target_members:
+            await ctx.send(f"🎊 Le serveur a atteint **{ctx.guild.member_count}** membres ! Le giveaway se termine maintenant !")
+            break
+
+        # Attendre 1 seconde
         remaining_time -= 1
         await asyncio.sleep(1)
-        if remaining_time % 10 == 0 or remaining_time <= 5:
-            await giveaway_msg.edit(content=f"🎉 **GIVEAWAY** 🎉\n"
-                                    f"🏆 Prix : {prize}\n"
-                                    f"🕒 Temps restant : {remaining_time} secondes.\n"
-                                    f"Réagis avec 🎉 pour participer !")
+
+        # Mettre à jour le message périodiquement
+        if remaining_time % 30 == 0 or remaining_time <= 5:
+            try:
+                if is_member_based:
+                    current_members = ctx.guild.member_count
+                    members_needed = target_members - current_members
+                    await giveaway_msg.edit(content=f"🎉 **GIVEAWAY** 🎉\n"
+                                           f"🏆 Prix : {prize}\n"
+                                           f"👥 Se terminera quand le serveur atteindra **{target_members}** membres (actuellement {current_members}, encore {members_needed} membres nécessaires).\n"
+                                           f"🕒 Ou dans {remaining_time} secondes maximum.\n"
+                                           f"Réagis avec 🎉 pour participer !")
+                else:
+                    await giveaway_msg.edit(content=f"🎉 **GIVEAWAY** 🎉\n"
+                                           f"🏆 Prix : {prize}\n"
+                                           f"🕒 Temps restant : {remaining_time} secondes.\n"
+                                           f"Réagis avec 🎉 pour participer !")
+            except discord.NotFound:
+                # Le message a été supprimé
+                if giveaway_msg.id in giveaways:
+                    del giveaways[giveaway_msg.id]
+                return
+            except Exception as e:
+                print(f"Erreur lors de la mise à jour du message de giveaway: {e}")
 
     # Vérifier s'il y a des participants et choisir un gagnant
     current_giveaway = giveaways.get(giveaway_msg.id)
     if current_giveaway and current_giveaway["participants"]:
         winner = random.choice(list(current_giveaway["participants"]))
+
+        # Déterminer la raison de fin du giveaway
+        end_reason = "Le temps est écoulé" if not is_member_based else f"Le serveur a atteint {ctx.guild.member_count} membres"
+
         await giveaway_msg.edit(
             content=f"🎉 **GIVEAWAY TERMINÉ !** 🎉\n"
-            f"🏆 **Le gagnant est {winner.mention} !** 🎊\n    "
-            f"🎁 Prix remporté : {prize}")
+            f"🏆 **Le gagnant est {winner.mention} !** 🎊\n"
+            f"🎁 Prix remporté : {prize}\n"
+            f"📝 Raison : {end_reason}")
+
+        # Obtenir les IDs des rôles depuis la configuration
+        guild_id = ctx.guild.id
+        role_join_id = get_config(guild_id, 'ROLE_JOIN_ID')
+        giveaway_winner_role_id = get_config(guild_id, 'GIVEAWAY_WINNER_ROLE_ID')
 
         # Ajout et retrait de rôles au gagnant
-        role_to_remove = discord.utils.get(winner.guild.roles,
-                                         id=ROLE_JOIN_ID)
-        role_to_add = discord.utils.get(winner.guild.roles,
-                                      id=GIVEAWAY_WINNER_ROLE_ID)
+        role_to_remove = discord.utils.get(winner.guild.roles, id=role_join_id) if role_join_id else None
+        role_to_add = discord.utils.get(winner.guild.roles, id=giveaway_winner_role_id) if giveaway_winner_role_id else None
 
         if role_to_remove and role_to_add:
             try:
@@ -1567,7 +1661,6 @@ async def giveaway(ctx, time: int, *, prize: str):
     # Supprimer les informations du giveaway
     if giveaway_msg.id in giveaways:
         del giveaways[giveaway_msg.id]
-
 
 # Commandes de modération
 @bot.command()

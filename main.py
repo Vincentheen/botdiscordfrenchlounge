@@ -21,9 +21,10 @@ LOG_JOIN_LEAVE_ID = 1357111972486840472  # ID du canal pour les logs d'arrivées
 MUTE_ROLE_ID = 1357046834048139457
 
 # IDs des rôles de staff
-ADMIN_ROLE_ID = 1354892680735227911    # Administrateur
-MOD_ROLE_ID = 1354900001565966337                        # Modérateur (remplacez par l'ID réel)
-HELPER_ROLE_ID = 1354899626997579807                    # Helper (remplacez par l'ID réel)
+OWNER_ROLE_ID = 1354892680735227911    # Propriétaire du serveur
+ADMIN_ROLE_ID = 1354900754275504310    # Administrateur (même ID que OWNER pour l'instant)
+MOD_ROLE_ID = 1354900001565966337      # Modérateur
+HELPER_ROLE_ID = 1354899626997579807   # Helper
 
 ROLE_JOIN_ID = 1357113117561192478
 GIVEAWAY_WINNER_ROLE_ID = 1357113189762076692
@@ -40,6 +41,7 @@ PERMISSIONS_FILE = 'permissions.json'
 def save_config():
     config = {
         'LOG_JOIN_LEAVE_ID': LOG_JOIN_LEAVE_ID,
+        'OWNER_ROLE_ID': OWNER_ROLE_ID,
         'ADMIN_ROLE_ID': ADMIN_ROLE_ID,
         'MOD_ROLE_ID': MOD_ROLE_ID,
         'HELPER_ROLE_ID': HELPER_ROLE_ID
@@ -54,11 +56,12 @@ def save_config():
 
 # Fonction pour charger la configuration
 def load_config():
-    global LOG_JOIN_LEAVE_ID, ADMIN_ROLE_ID, MOD_ROLE_ID, HELPER_ROLE_ID
+    global LOG_JOIN_LEAVE_ID, OWNER_ROLE_ID, ADMIN_ROLE_ID, MOD_ROLE_ID, HELPER_ROLE_ID
     try:
         with open(CONFIG_FILE, 'r') as f:
             config = json.load(f)
             LOG_JOIN_LEAVE_ID = config.get('LOG_JOIN_LEAVE_ID', LOG_JOIN_LEAVE_ID)
+            OWNER_ROLE_ID = config.get('OWNER_ROLE_ID', OWNER_ROLE_ID)
             ADMIN_ROLE_ID = config.get('ADMIN_ROLE_ID', ADMIN_ROLE_ID)
             MOD_ROLE_ID = config.get('MOD_ROLE_ID', MOD_ROLE_ID)
             HELPER_ROLE_ID = config.get('HELPER_ROLE_ID', HELPER_ROLE_ID)
@@ -234,15 +237,37 @@ def has_permission(member, command_name, target_member=None):
     Returns:
         bool: True si l'utilisateur a la permission, False sinon
     """
-    # Si la cible est un administrateur, seul un administrateur peut agir sur lui
+    # Vérifier la hiérarchie si une cible est spécifiée
     if target_member:
+        # Vérifier si la cible est propriétaire du serveur
+        owner_role = discord.utils.get(target_member.guild.roles, id=OWNER_ROLE_ID)
+        if owner_role and owner_role in target_member.roles:
+            # Seul le propriétaire du serveur peut agir sur un autre propriétaire
+            return discord.utils.get(member.guild.roles, id=OWNER_ROLE_ID) in member.roles
+
+        # Vérifier si la cible est administrateur
         admin_role = discord.utils.get(target_member.guild.roles, id=ADMIN_ROLE_ID)
         if admin_role and admin_role in target_member.roles:
-            # Si la cible est admin, vérifier si l'exécuteur est aussi admin
-            return member.guild_permissions.administrator
+            # Seul un propriétaire ou un administrateur peut agir sur un administrateur
+            return (discord.utils.get(member.guild.roles, id=OWNER_ROLE_ID) in member.roles or
+                    discord.utils.get(member.guild.roles, id=ADMIN_ROLE_ID) in member.roles)
+
+        # Vérifier si la cible est modérateur
+        mod_role = discord.utils.get(target_member.guild.roles, id=MOD_ROLE_ID)
+        if mod_role and mod_role in target_member.roles:
+            # Seul un propriétaire, un administrateur ou un modérateur peut agir sur un modérateur
+            return (discord.utils.get(member.guild.roles, id=OWNER_ROLE_ID) in member.roles or
+                    discord.utils.get(member.guild.roles, id=ADMIN_ROLE_ID) in member.roles or
+                    discord.utils.get(member.guild.roles, id=MOD_ROLE_ID) in member.roles)
+
+    # Vérifier les permissions de l'utilisateur qui exécute la commande
+
+    # Le propriétaire du serveur a toutes les permissions
+    if discord.utils.get(member.guild.roles, id=OWNER_ROLE_ID) in member.roles:
+        return True
 
     # Les administrateurs ont toutes les permissions
-    if member.guild_permissions.administrator:
+    if discord.utils.get(member.guild.roles, id=ADMIN_ROLE_ID) in member.roles:
         return True
 
     # Vérifier si l'utilisateur a le rôle de modérateur
@@ -974,12 +999,18 @@ async def on_ready():
 
         # Vérifier les rôles
         mute_role = discord.utils.get(guild.roles, id=MUTE_ROLE_ID)
+        owner_role = discord.utils.get(guild.roles, id=OWNER_ROLE_ID)
         admin_role = discord.utils.get(guild.roles, id=ADMIN_ROLE_ID)
+        mod_role = discord.utils.get(guild.roles, id=MOD_ROLE_ID)
+        helper_role = discord.utils.get(guild.roles, id=HELPER_ROLE_ID)
         join_role = discord.utils.get(guild.roles, id=ROLE_JOIN_ID)
         giveaway_role = discord.utils.get(guild.roles, id=GIVEAWAY_WINNER_ROLE_ID)
 
         print(f"  Rôle mute (ID: {MUTE_ROLE_ID}): {'✅ Trouvé' if mute_role else '❌ MANQUANT'}")
-        print(f"  Rôle admin (ID: {ADMIN_ROLE_ID}): {'✅ Trouvé' if admin_role else '❌ MANQUANT'}")
+        print(f"  Rôle propriétaire (ID: {OWNER_ROLE_ID}): {'✅ Trouvé' if owner_role else '❌ MANQUANT'}")
+        print(f"  Rôle administrateur (ID: {ADMIN_ROLE_ID}): {'✅ Trouvé' if admin_role else '❌ MANQUANT'}")
+        print(f"  Rôle modérateur (ID: {MOD_ROLE_ID}): {'✅ Trouvé' if mod_role else '❌ MANQUANT'}")
+        print(f"  Rôle helper (ID: {HELPER_ROLE_ID}): {'✅ Trouvé' if helper_role else '❌ MANQUANT'}")
         print(f"  Rôle join (ID: {ROLE_JOIN_ID}): {'✅ Trouvé' if join_role else '❌ MANQUANT'}")
         print(f"  Rôle giveaway (ID: {GIVEAWAY_WINNER_ROLE_ID}): {'✅ Trouvé' if giveaway_role else '❌ MANQUANT'}")
 
@@ -1226,9 +1257,10 @@ async def on_message(message):
         # On continue le traitement normal du message
 
        
-    # Vérifier si l'utilisateur a le rôle administrateur
+    # Vérifier si l'utilisateur a un rôle de staff (propriétaire ou administrateur)
+    owner_role = discord.utils.get(message.author.roles, id=OWNER_ROLE_ID)
     admin_role = discord.utils.get(message.author.roles, id=ADMIN_ROLE_ID)
-    is_admin = admin_role is not None
+    is_staff = owner_role is not None or admin_role is not None
 
     # Vérification des mots interdits
     for mot in MOTS_INTERDITS:
@@ -1249,8 +1281,8 @@ async def on_message(message):
                 print(f"Erreur lors de la suppression du message: {e}")
                 pass
 
-            # Appliquer les avertissements seulement pour les non-administrateurs
-            if not is_admin:
+            # Appliquer les avertissements seulement pour les non-staff (ni propriétaire ni administrateur)
+            if not is_staff:
                 if message.author.id not in warnings:
                     warnings[message.author.id] = 0
 
@@ -1268,10 +1300,10 @@ async def on_message(message):
                     except Exception as e:
                         print(f"Erreur lors de l'expulsion de {message.author.name}: {e}")
 
-                # Ne pas traiter les commandes si un mot interdit a été détecté pour les non-admins
+                # Ne pas traiter les commandes si un mot interdit a été détecté pour les non-staff
                 return
 
-            # Pour les admins, on continue le traitement des commandes après suppression du message
+            # Pour les staff (propriétaires et admins), on continue le traitement des commandes après suppression du message
             break
     
     # Permettre le traitement des commandes
@@ -1280,8 +1312,13 @@ async def on_message(message):
 # Commandes générales
 @bot.command()
 async def hello(ctx):
-    role = discord.utils.get(ctx.author.roles, id=ADMIN_ROLE_ID)
-    if role is None:
+    # Vérifier si l'utilisateur a un rôle de staff (propriétaire, admin, mod ou helper)
+    owner_role = discord.utils.get(ctx.author.roles, id=OWNER_ROLE_ID)
+    admin_role = discord.utils.get(ctx.author.roles, id=ADMIN_ROLE_ID)
+    mod_role = discord.utils.get(ctx.author.roles, id=MOD_ROLE_ID)
+    helper_role = discord.utils.get(ctx.author.roles, id=HELPER_ROLE_ID)
+
+    if not any([owner_role, admin_role, mod_role, helper_role]):
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
     await ctx.send(
@@ -1291,9 +1328,13 @@ async def hello(ctx):
 @bot.command()
 async def commands(ctx):
     """Affiche la liste de toutes les commandes disponibles."""
-    # Vérifier si l'utilisateur est administrateur
-    role = discord.utils.get(ctx.author.roles, id=ADMIN_ROLE_ID)
-    if role is None:
+    # Vérifier si l'utilisateur a un rôle de staff (propriétaire, admin, mod ou helper)
+    owner_role = discord.utils.get(ctx.author.roles, id=OWNER_ROLE_ID)
+    admin_role = discord.utils.get(ctx.author.roles, id=ADMIN_ROLE_ID)
+    mod_role = discord.utils.get(ctx.author.roles, id=MOD_ROLE_ID)
+    helper_role = discord.utils.get(ctx.author.roles, id=HELPER_ROLE_ID)
+
+    if not any([owner_role, admin_role, mod_role, helper_role]):
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
 
@@ -1315,6 +1356,23 @@ async def commands(ctx):
         "`!setjoinleavechannel [#canal]` - Configure le canal pour les logs d'arrivées et départs"
     ]
     embed.add_field(name="🎉 Général", value="\n".join(general_commands), inline=False)
+
+    # Commandes de gestion des rôles de staff
+    staff_commands = [
+        "`!setownerrole @role` - Définit le rôle propriétaire du serveur",
+        "`!setadminrole @role` - Définit le rôle administrateur",
+        "`!setmodrole @role` - Définit le rôle modérateur",
+        "`!sethelperrole @role` - Définit le rôle helper",
+        "`!staffperms [owner/admin/mod/helper]` - Affiche les permissions détaillées des rôles de staff",
+        "`!permissions [mod/helper]` - Affiche les permissions des rôles modérateur et helper",
+        "`!addperm <mod/helper> <commande>` - Ajoute une permission à un rôle",
+        "`!removeperm <mod/helper> <commande>` - Retire une permission à un rôle",
+        "`!resetperms [mod/helper/all]` - Réinitialise les permissions"
+    ]
+
+    # N'afficher les commandes de gestion des rôles de staff qu'aux propriétaires et administrateurs
+    if owner_role or admin_role:
+        embed.add_field(name="👑 Gestion des rôles de staff", value="\n".join(staff_commands), inline=False)
 
     # Commandes de modération
     mod_commands = [
@@ -1381,8 +1439,11 @@ async def commands(ctx):
 @bot.command()
 async def ticket(ctx):
     """Crée un message de création de ticket dans le canal ticket-support."""
-    role = discord.utils.get(ctx.author.roles, id=ADMIN_ROLE_ID)
-    if role is None:
+    # Vérifier si l'utilisateur a un rôle de staff (propriétaire ou administrateur)
+    owner_role = discord.utils.get(ctx.author.roles, id=OWNER_ROLE_ID)
+    admin_role = discord.utils.get(ctx.author.roles, id=ADMIN_ROLE_ID)
+
+    if not (owner_role or admin_role):
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
 
@@ -1793,16 +1854,19 @@ async def check_setup(ctx):
 
     # Vérifier les rôles
     mute_role = discord.utils.get(ctx.guild.roles, id=MUTE_ROLE_ID)
+    owner_role = discord.utils.get(ctx.guild.roles, id=OWNER_ROLE_ID)
     admin_role = discord.utils.get(ctx.guild.roles, id=ADMIN_ROLE_ID)
     mod_role = discord.utils.get(ctx.guild.roles, id=MOD_ROLE_ID)
     helper_role = discord.utils.get(ctx.guild.roles, id=HELPER_ROLE_ID)
     join_role = discord.utils.get(ctx.guild.roles, id=ROLE_JOIN_ID)
     giveaway_role = discord.utils.get(ctx.guild.roles, id=GIVEAWAY_WINNER_ROLE_ID)
 
-    # Rôles de modération
+    # Rôles de staff
     embed.add_field(
         name="👑 Rôles de staff",
-        value=f"Rôle administrateur (ID: {ADMIN_ROLE_ID}): {'✅' if mod_role else '❌'}\n"
+        value=f"Rôle propriétaire (ID: {OWNER_ROLE_ID}): {'✅' if owner_role else '❌'}\n"
+              f"Rôle administrateur (ID: {ADMIN_ROLE_ID}): {'✅' if admin_role else '❌'}\n"
+              f"Rôle modérateur (ID: {MOD_ROLE_ID}): {'✅' if mod_role else '❌'}\n"
               f"Rôle helper (ID: {HELPER_ROLE_ID}): {'✅' if helper_role else '❌'}\n"
               f"Rôle mute (ID: {MUTE_ROLE_ID}): {'✅' if mute_role else '❌'}",
         inline=False
@@ -1811,8 +1875,7 @@ async def check_setup(ctx):
     # Autres rôles
     embed.add_field(
         name="🏷️ Autres rôles",
-        value=f"Rôle modérateur (ID: {MOD_ROLE_ID}): {'✅' if admin_role else '❌'}\n"
-              f"Rôle join (ID: {ROLE_JOIN_ID}): {'✅' if join_role else '❌'}\n"
+        value=f"Rôle join (ID: {ROLE_JOIN_ID}): {'✅' if join_role else '❌'}\n"
               f"Rôle giveaway (ID: {GIVEAWAY_WINNER_ROLE_ID}): {'✅' if giveaway_role else '❌'}",
         inline=False
     )
@@ -2634,6 +2697,23 @@ async def on_guild_update(before, after):
         await log_channel.send(embed=embed)
 
 # Commandes pour configurer les rôles de staff
+@bot.command(name="setownerrole")
+async def set_owner_role(ctx, role: discord.Role = None):
+    """Définit le rôle de propriétaire du serveur."""
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
+        return
+
+    if role is None:
+        await ctx.send("❌ Usage: `!setownerrole @role`")
+        return
+
+    global OWNER_ROLE_ID
+    OWNER_ROLE_ID = role.id
+    save_config()
+
+    await ctx.send(f"✅ Le rôle de propriétaire a été défini sur {role.mention} (ID: {role.id}).")
+
 @bot.command(name="setadminrole")
 async def set_admin_role(ctx, role: discord.Role = None):
     """Définit le rôle d'administrateur."""
@@ -2745,6 +2825,223 @@ async def show_permissions(ctx, role_type: str = None):
             )
 
         embed.set_footer(text="Utilisez !permissions mod ou !permissions helper pour voir toutes les commandes d'un rôle spécifique")
+
+    await ctx.send(embed=embed)
+
+@bot.command(name="staffperms")
+async def staff_permissions(ctx, role_type: str = None):
+    """
+    Affiche les permissions détaillées de tous les rôles de staff (owner, admin, mod, helper).
+
+    Usage:
+    !staffperms - Affiche un résumé de tous les rôles
+    !staffperms owner - Affiche les détails du rôle propriétaire
+    !staffperms admin - Affiche les détails du rôle administrateur
+    !staffperms mod - Affiche les détails du rôle modérateur
+    !staffperms helper - Affiche les détails du rôle helper
+    """
+    # Vérifier si l'utilisateur a la permission d'utiliser cette commande
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
+        return
+
+    # Vérifier si le type de rôle est valide
+    valid_roles = ["owner", "admin", "mod", "helper"]
+    if role_type and role_type.lower() not in valid_roles:
+        await ctx.send(f"❌ Type de rôle invalide. Utilisez l'un des suivants : {', '.join(valid_roles)}")
+        return
+
+    # Créer l'embed de base
+    embed = discord.Embed(
+        title="👑 Hiérarchie et Permissions du Staff",
+        color=discord.Color.gold(),
+        timestamp=discord.utils.utcnow()
+    )
+
+    # Obtenir les objets de rôle Discord
+    owner_role = discord.utils.get(ctx.guild.roles, id=OWNER_ROLE_ID)
+    admin_role = discord.utils.get(ctx.guild.roles, id=ADMIN_ROLE_ID)
+    mod_role = discord.utils.get(ctx.guild.roles, id=MOD_ROLE_ID)
+    helper_role = discord.utils.get(ctx.guild.roles, id=HELPER_ROLE_ID)
+
+    # Définir les mentions de rôle ou texte par défaut
+    owner_mention = owner_role.mention if owner_role else f"Rôle propriétaire (ID: {OWNER_ROLE_ID})"
+    admin_mention = admin_role.mention if admin_role else f"Rôle administrateur (ID: {ADMIN_ROLE_ID})"
+    mod_mention = mod_role.mention if mod_role else f"Rôle modérateur (ID: {MOD_ROLE_ID})"
+    helper_mention = helper_role.mention if helper_role else f"Rôle helper (ID: {HELPER_ROLE_ID})"
+
+    # Si un type de rôle spécifique est demandé
+    if role_type:
+        role_type = role_type.lower()
+
+        if role_type == "owner":
+            embed.description = f"## {owner_mention}\n\n**Niveau le plus élevé dans la hiérarchie**"
+            embed.add_field(
+                name="🔑 Permissions",
+                value="- Accès complet à toutes les commandes du bot\n"
+                      "- Seul à pouvoir agir sur d'autres propriétaires\n"
+                      "- Peut configurer tous les aspects du serveur et du bot\n"
+                      "- Peut modifier les permissions de tous les rôles\n"
+                      "- Peut sanctionner n'importe quel membre, y compris les administrateurs",
+                inline=False
+            )
+            embed.add_field(
+                name="⚙️ Commandes exclusives",
+                value="- Toutes les commandes d'administration\n"
+                      "- Configuration des rôles (`!setownerrole`, `!setadminrole`, etc.)\n"
+                      "- Gestion des permissions (`!addperm`, `!removeperm`, etc.)\n"
+                      "- Configuration du serveur (`!setuptickets`, `!setupreglement`, etc.)",
+                inline=False
+            )
+            embed.add_field(
+                name="🛡️ Hiérarchie",
+                value="- Peut agir sur : Propriétaires, Administrateurs, Modérateurs, Helpers, Membres\n"
+                      "- Peut être ciblé par : Personne",
+                inline=False
+            )
+
+        elif role_type == "admin":
+            embed.description = f"## {admin_mention}\n\n**Second niveau dans la hiérarchie du staff**"
+            embed.add_field(
+                name="🔑 Permissions",
+                value="- Accès complet à toutes les commandes du bot\n"
+                      "- Peut configurer la plupart des aspects du serveur\n"
+                      "- Peut modifier les permissions des modérateurs et helpers\n"
+                      "- Peut sanctionner les modérateurs, helpers et membres",
+                inline=False
+            )
+            embed.add_field(
+                name="⚙️ Commandes exclusives",
+                value="- Toutes les commandes de modération\n"
+                      "- Configuration des rôles (`!setmodrole`, `!sethelperrole`)\n"
+                      "- Gestion des permissions (`!addperm`, `!removeperm`)\n"
+                      "- Configuration du serveur (`!setuptickets`, `!setupreglement`)",
+                inline=False
+            )
+            embed.add_field(
+                name="🛡️ Hiérarchie",
+                value="- Peut agir sur : Administrateurs, Modérateurs, Helpers, Membres\n"
+                      "- Peut être ciblé par : Propriétaires",
+                inline=False
+            )
+
+        elif role_type == "mod":
+            embed.description = f"## {mod_mention}\n\n**{role_permissions['mod']['description']}**"
+
+            # Obtenir les commandes du modérateur
+            mod_commands = role_permissions["mod"]["commands"]
+
+            # Diviser les commandes en groupes pour éviter de dépasser la limite de caractères
+            chunks = [mod_commands[i:i+15] for i in range(0, len(mod_commands), 15)]
+
+            embed.add_field(
+                name="🔑 Permissions",
+                value="- Accès aux commandes de modération avancées\n"
+                      "- Peut sanctionner les helpers et membres\n"
+                      "- Peut gérer les tickets et les messages\n"
+                      "- Peut attribuer et retirer certains rôles",
+                inline=False
+            )
+
+            for i, chunk in enumerate(chunks):
+                embed.add_field(
+                    name=f"⚙️ Commandes {i+1}" if i > 0 else "⚙️ Commandes",
+                    value="```\n" + "\n".join([f"!{cmd}" for cmd in chunk]) + "```",
+                    inline=False
+                )
+
+            embed.add_field(
+                name="🛡️ Hiérarchie",
+                value="- Peut agir sur : Modérateurs, Helpers, Membres\n"
+                      "- Peut être ciblé par : Propriétaires, Administrateurs",
+                inline=False
+            )
+
+        elif role_type == "helper":
+            embed.description = f"## {helper_mention}\n\n**{role_permissions['helper']['description']}**"
+
+            # Obtenir les commandes du helper
+            helper_commands = role_permissions["helper"]["commands"]
+
+            # Diviser les commandes en groupes pour éviter de dépasser la limite de caractères
+            chunks = [helper_commands[i:i+15] for i in range(0, len(helper_commands), 15)]
+
+            embed.add_field(
+                name="🔑 Permissions",
+                value="- Accès aux commandes de modération de base\n"
+                      "- Peut sanctionner les membres ordinaires\n"
+                      "- Peut gérer les tickets et certains messages\n"
+                      "- Permissions limitées par rapport aux modérateurs",
+                inline=False
+            )
+
+            for i, chunk in enumerate(chunks):
+                embed.add_field(
+                    name=f"⚙️ Commandes {i+1}" if i > 0 else "⚙️ Commandes",
+                    value="```\n" + "\n".join([f"!{cmd}" for cmd in chunk]) + "```",
+                    inline=False
+                )
+
+            embed.add_field(
+                name="🛡️ Hiérarchie",
+                value="- Peut agir sur : Membres\n"
+                      "- Peut être ciblé par : Propriétaires, Administrateurs, Modérateurs",
+                inline=False
+            )
+
+    # Si aucun type de rôle n'est spécifié, afficher un résumé de tous les rôles
+    else:
+        embed.description = "Vue d'ensemble de la hiérarchie et des permissions du staff"
+
+        # Propriétaire
+        embed.add_field(
+            name=f"👑 Propriétaire ({owner_mention})",
+            value="- Niveau le plus élevé dans la hiérarchie\n"
+                  "- Accès complet à toutes les commandes\n"
+                  "- Peut agir sur tous les autres rôles\n"
+                  "- Seul à pouvoir agir sur d'autres propriétaires",
+            inline=False
+        )
+
+        # Administrateur
+        embed.add_field(
+            name=f"🔱 Administrateur ({admin_mention})",
+            value="- Second niveau dans la hiérarchie\n"
+                  "- Accès complet à toutes les commandes\n"
+                  "- Peut agir sur les administrateurs, modérateurs, helpers et membres\n"
+                  "- Ne peut pas agir sur les propriétaires",
+            inline=False
+        )
+
+        # Modérateur
+        mod_commands_preview = ", ".join([f"`!{cmd}`" for cmd in role_permissions["mod"]["commands"][:5]])
+        if len(role_permissions["mod"]["commands"]) > 5:
+            mod_commands_preview += f" et {len(role_permissions['mod']['commands']) - 5} autres..."
+
+        embed.add_field(
+            name=f"🔰 Modérateur ({mod_mention})",
+            value=f"- {role_permissions['mod']['description']}\n"
+                  f"- Peut agir sur les modérateurs, helpers et membres\n"
+                  f"- Ne peut pas agir sur les propriétaires et administrateurs\n"
+                  f"- Commandes: {mod_commands_preview}",
+            inline=False
+        )
+
+        # Helper
+        helper_commands_preview = ", ".join([f"`!{cmd}`" for cmd in role_permissions["helper"]["commands"][:5]])
+        if len(role_permissions["helper"]["commands"]) > 5:
+            helper_commands_preview += f" et {len(role_permissions['helper']['commands']) - 5} autres..."
+
+        embed.add_field(
+            name=f"🔹 Helper ({helper_mention})",
+            value=f"- {role_permissions['helper']['description']}\n"
+                  f"- Peut agir uniquement sur les membres\n"
+                  f"- Ne peut pas agir sur les propriétaires, administrateurs et modérateurs\n"
+                  f"- Commandes: {helper_commands_preview}",
+            inline=False
+        )
+
+        embed.set_footer(text="Utilisez !staffperms <role> pour voir les détails d'un rôle spécifique")
 
     await ctx.send(embed=embed)
 

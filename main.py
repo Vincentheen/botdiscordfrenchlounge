@@ -2884,29 +2884,87 @@ async def create_custom_role(ctx, role_name: str = None, color: str = None, *com
         await ctx.send(f"❌ Une erreur s'est produite lors de la création du rôle: {str(e)}")
 
 @bot.command(name="setrole")
-async def set_custom_role(ctx, role_name: str = None, role: discord.Role = None, *commands):
+async def set_custom_role(ctx, role_name: str = None, role_input = None, *commands):
     """
     Définit un rôle personnalisé avec des permissions spécifiques.
 
     Usage:
-    !setrole <nom_du_role> @role commande1 commande2 commande3 ...
+    !setrole <nom_du_role> <@role ou nom du rôle> commande1 commande2 commande3 ...
 
-    Exemple:
+    Exemples:
     !setrole support @Support kick mute warn clear
+    !setrole events "Event Team" giveaway clear
     """
     if not ctx.author.guild_permissions.administrator:
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
 
-    if role_name is None or role is None:
-        await ctx.send("❌ Usage: `!setrole <nom_du_role> @role commande1 commande2 ...`\n"
-                      "Exemple: `!setrole support @Support kick mute warn clear`")
+    if role_name is None or role_input is None:
+        await ctx.send("❌ Usage: `!setrole <nom_du_role> <@role ou nom du rôle> commande1 commande2 ...`\n"
+                      "Exemples:\n"
+                      "`!setrole support @Support kick mute warn clear`\n"
+                      "`!setrole events \"Event Team\" giveaway clear`")
         return
 
-    # Convertir les commandes en liste
-    commands_list = list(commands)
+    # Trouver le rôle Discord
+    role = None
+
+    # Vérifier si c'est une mention de rôle
+    if ctx.message.role_mentions:
+        role = ctx.message.role_mentions[0]
+    else:
+        # Chercher le rôle par nom
+        role = discord.utils.get(ctx.guild.roles, name=role_input)
+
+        # Si le rôle n'est pas trouvé, essayer de chercher de manière insensible à la casse
+        if not role:
+            for guild_role in ctx.guild.roles:
+                if guild_role.name.lower() == role_input.lower():
+                    role = guild_role
+                    break
+
+    # Si le rôle n'est pas trouvé
+    if not role:
+        await ctx.send(f"❌ Le rôle **{role_input}** n'a pas été trouvé sur le serveur.")
+        return
+
+    # Vérifier si c'est un rôle protégé
+    if role.id == OWNER_ROLE_ID:
+        await ctx.send("⚠️ Ce rôle est configuré comme rôle propriétaire (owner). Vous pouvez le configurer, mais cela n'affectera pas ses permissions spéciales.")
+
+    if role.id == ADMIN_ROLE_ID:
+        await ctx.send("⚠️ Ce rôle est configuré comme rôle administrateur (admin). Vous pouvez le configurer, mais cela n'affectera pas ses permissions spéciales.")
+
+    if role.id == MOD_ROLE_ID:
+        await ctx.send("⚠️ Ce rôle est configuré comme rôle modérateur (mod). Utilisez `!addperm mod` pour modifier ses permissions.")
+        return
+
+    if role.id == HELPER_ROLE_ID:
+        await ctx.send("⚠️ Ce rôle est configuré comme rôle helper. Utilisez `!addperm helper` pour modifier ses permissions.")
+        return
+
+    # Vérifier si c'est un rôle par défaut (@everyone)
+    if role.is_default():
+        await ctx.send("⛔ Le rôle @everyone ne peut pas être configuré comme rôle personnalisé.")
+        return
+
+    # Vérifier si c'est un rôle intégré (bot)
+    if role.is_integration() or role.is_bot_managed():
+        await ctx.send("⚠️ Ce rôle est géré par une intégration ou un bot. Vous pouvez le configurer, mais il pourrait être modifié par l'intégration ou le bot.")
+
+    # Convertir les commandes en liste et supprimer le préfixe ! si présent
+    commands_list = []
+    for cmd in commands:
+        if cmd.startswith('!'):
+            commands_list.append(cmd[1:])
+        else:
+            commands_list.append(cmd)
+
     if not commands_list:
         await ctx.send("⚠️ Aucune commande spécifiée. Ce rôle n'aura aucune permission.")
+
+    # Convertir le nom du rôle en minuscules pour la configuration
+    role_name = role_name.lower()
 
     # Ajouter ou mettre à jour le rôle personnalisé
     global CUSTOM_ROLES
@@ -3082,26 +3140,100 @@ async def delete_custom_role(ctx, *, role_input: str = None):
         await ctx.send(f"❌ Une erreur s'est produite lors de la suppression du rôle: {str(e)}")
 
 @bot.command(name="addrolecommand")
-async def add_role_command(ctx, role_name: str = None, *commands):
+async def add_role_command(ctx, role_input: str = None, *commands):
     """
-    Ajoute des commandes à un rôle personnalisé existant.
+    Ajoute des commandes à un rôle existant.
 
     Usage:
-    !addrolecommand <nom_du_role> commande1 commande2 ...
+    !addrolecommand <nom_du_role ou @mention> commande1 commande2 ...
+
+    Exemples:
+    !addrolecommand support kick mute warn
+    !addrolecommand @Support ban clear
     """
     if not ctx.author.guild_permissions.administrator:
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
 
-    if role_name is None or not commands:
-        await ctx.send("❌ Usage: `!addrolecommand <nom_du_role> commande1 commande2 ...`")
+    if role_input is None or not commands:
+        await ctx.send("❌ Usage: `!addrolecommand <nom_du_role ou @mention> commande1 commande2 ...`\n"
+                      "Exemples:\n"
+                      "`!addrolecommand support kick mute warn`\n"
+                      "`!addrolecommand @Support ban clear`")
         return
 
-    # Vérifier si le rôle existe
-    role_name = role_name.lower()
-    if role_name not in CUSTOM_ROLES:
-        await ctx.send(f"❌ Le rôle personnalisé **{role_name}** n'existe pas. Utilisez `!setrole` pour le créer d'abord.")
+    # Trouver le rôle Discord et le nom dans la configuration
+    role = None
+    role_name = None
+
+    # Vérifier si c'est une mention de rôle
+    if ctx.message.role_mentions:
+        role = ctx.message.role_mentions[0]
+
+        # Chercher le nom du rôle dans la configuration
+        for custom_name, data in CUSTOM_ROLES.items():
+            if data["id"] == role.id:
+                role_name = custom_name
+                break
+
+        # Si le rôle n'est pas dans la configuration, utiliser son nom comme identifiant
+        if not role_name:
+            role_name = role.name.lower()
+    else:
+        # Chercher d'abord dans la configuration
+        role_input_lower = role_input.lower()
+        if role_input_lower in CUSTOM_ROLES:
+            role_name = role_input_lower
+            role_id = CUSTOM_ROLES[role_name]["id"]
+            role = discord.utils.get(ctx.guild.roles, id=role_id)
+        else:
+            # Chercher le rôle par nom
+            role = discord.utils.get(ctx.guild.roles, name=role_input)
+
+            # Si le rôle n'est pas trouvé, essayer de chercher de manière insensible à la casse
+            if not role:
+                for guild_role in ctx.guild.roles:
+                    if guild_role.name.lower() == role_input.lower():
+                        role = guild_role
+                        break
+
+            if role:
+                # Chercher si ce rôle est déjà dans la configuration
+                for custom_name, data in CUSTOM_ROLES.items():
+                    if data["id"] == role.id:
+                        role_name = custom_name
+                        break
+
+                # Si le rôle n'est pas dans la configuration, utiliser son nom comme identifiant
+                if not role_name:
+                    role_name = role.name.lower()
+
+    # Si le rôle n'est pas trouvé
+    if not role:
+        await ctx.send(f"❌ Le rôle **{role_input}** n'a pas été trouvé sur le serveur.")
         return
+
+    # Vérifier si c'est un rôle protégé
+    if role.id == MOD_ROLE_ID:
+        await ctx.send("⚠️ Ce rôle est configuré comme rôle modérateur (mod). Utilisez `!addperm mod` pour modifier ses permissions.")
+        return
+
+    if role.id == HELPER_ROLE_ID:
+        await ctx.send("⚠️ Ce rôle est configuré comme rôle helper. Utilisez `!addperm helper` pour modifier ses permissions.")
+        return
+
+    # Vérifier si c'est un rôle par défaut (@everyone)
+    if role.is_default():
+        await ctx.send("⛔ Le rôle @everyone ne peut pas être configuré comme rôle personnalisé.")
+        return
+
+    # Si le rôle n'est pas dans la configuration, l'ajouter
+    if role_name not in CUSTOM_ROLES:
+        CUSTOM_ROLES[role_name] = {
+            "id": role.id,
+            "permissions": []
+        }
+        await ctx.send(f"✅ Le rôle **{role.name}** a été ajouté à la configuration sous le nom **{role_name}**.")
 
     # Ajouter les nouvelles commandes
     added_commands = []
@@ -3120,34 +3252,97 @@ async def add_role_command(ctx, role_name: str = None, *commands):
 
     if added_commands:
         commands_str = ", ".join([f"`!{cmd}`" for cmd in added_commands])
-        await ctx.send(f"✅ {len(added_commands)} commande(s) ajoutée(s) au rôle **{role_name}**: {commands_str}")
+        await ctx.send(f"✅ {len(added_commands)} commande(s) ajoutée(s) au rôle **{role.name}** ({role_name}): {commands_str}")
     else:
-        await ctx.send(f"ℹ️ Aucune nouvelle commande ajoutée. Toutes les commandes spécifiées étaient déjà attribuées au rôle **{role_name}**.")
+        await ctx.send(f"ℹ️ Aucune nouvelle commande ajoutée. Toutes les commandes spécifiées étaient déjà attribuées au rôle **{role.name}** ({role_name}).")
 
     # Afficher les commandes actuelles
-    current_commands = ", ".join([f"`!{cmd}`" for cmd in CUSTOM_ROLES[role_name]["permissions"]])
-    await ctx.send(f"📋 Commandes actuelles pour **{role_name}**: {current_commands}")
+    current_commands = ", ".join([f"`!{cmd}`" for cmd in CUSTOM_ROLES[role_name]["permissions"]]) if CUSTOM_ROLES[role_name]["permissions"] else "Aucune"
+    await ctx.send(f"📋 Commandes actuelles pour **{role.name}** ({role_name}): {current_commands}")
 
 @bot.command(name="removerolecommand")
-async def remove_role_command(ctx, role_name: str = None, *commands):
+async def remove_role_command(ctx, role_input: str = None, *commands):
     """
-    Retire des commandes d'un rôle personnalisé existant.
+    Retire des commandes d'un rôle existant.
 
     Usage:
-    !removerolecommand <nom_du_role> commande1 commande2 ...
+    !removerolecommand <nom_du_role ou @mention> commande1 commande2 ...
+
+    Exemples:
+    !removerolecommand support kick mute
+    !removerolecommand @Support ban
     """
     if not ctx.author.guild_permissions.administrator:
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
 
-    if role_name is None or not commands:
-        await ctx.send("❌ Usage: `!removerolecommand <nom_du_role> commande1 commande2 ...`")
+    if role_input is None or not commands:
+        await ctx.send("❌ Usage: `!removerolecommand <nom_du_role ou @mention> commande1 commande2 ...`\n"
+                      "Exemples:\n"
+                      "`!removerolecommand support kick mute`\n"
+                      "`!removerolecommand @Support ban`")
         return
 
-    # Vérifier si le rôle existe
-    role_name = role_name.lower()
-    if role_name not in CUSTOM_ROLES:
-        await ctx.send(f"❌ Le rôle personnalisé **{role_name}** n'existe pas.")
+    # Trouver le rôle Discord et le nom dans la configuration
+    role = None
+    role_name = None
+
+    # Vérifier si c'est une mention de rôle
+    if ctx.message.role_mentions:
+        role = ctx.message.role_mentions[0]
+
+        # Chercher le nom du rôle dans la configuration
+        for custom_name, data in CUSTOM_ROLES.items():
+            if data["id"] == role.id:
+                role_name = custom_name
+                break
+
+        # Si le rôle n'est pas dans la configuration
+        if not role_name:
+            await ctx.send(f"❌ Le rôle **{role.name}** n'est pas configuré comme rôle personnalisé.")
+            return
+    else:
+        # Chercher d'abord dans la configuration
+        role_input_lower = role_input.lower()
+        if role_input_lower in CUSTOM_ROLES:
+            role_name = role_input_lower
+            role_id = CUSTOM_ROLES[role_name]["id"]
+            role = discord.utils.get(ctx.guild.roles, id=role_id)
+        else:
+            # Chercher le rôle par nom
+            role = discord.utils.get(ctx.guild.roles, name=role_input)
+
+            # Si le rôle n'est pas trouvé, essayer de chercher de manière insensible à la casse
+            if not role:
+                for guild_role in ctx.guild.roles:
+                    if guild_role.name.lower() == role_input.lower():
+                        role = guild_role
+                        break
+
+            if role:
+                # Chercher si ce rôle est déjà dans la configuration
+                for custom_name, data in CUSTOM_ROLES.items():
+                    if data["id"] == role.id:
+                        role_name = custom_name
+                        break
+
+                # Si le rôle n'est pas dans la configuration
+                if not role_name:
+                    await ctx.send(f"❌ Le rôle **{role.name}** n'est pas configuré comme rôle personnalisé.")
+                    return
+
+    # Si le rôle n'est pas trouvé ou n'est pas dans la configuration
+    if not role or not role_name:
+        await ctx.send(f"❌ Le rôle **{role_input}** n'a pas été trouvé ou n'est pas configuré comme rôle personnalisé.")
+        return
+
+    # Vérifier si c'est un rôle protégé
+    if role.id == MOD_ROLE_ID:
+        await ctx.send("⚠️ Ce rôle est configuré comme rôle modérateur (mod). Utilisez `!removeperm mod` pour modifier ses permissions.")
+        return
+
+    if role.id == HELPER_ROLE_ID:
+        await ctx.send("⚠️ Ce rôle est configuré comme rôle helper. Utilisez `!removeperm helper` pour modifier ses permissions.")
         return
 
     # Retirer les commandes
@@ -3167,13 +3362,13 @@ async def remove_role_command(ctx, role_name: str = None, *commands):
 
     if removed_commands:
         commands_str = ", ".join([f"`!{cmd}`" for cmd in removed_commands])
-        await ctx.send(f"✅ {len(removed_commands)} commande(s) retirée(s) du rôle **{role_name}**: {commands_str}")
+        await ctx.send(f"✅ {len(removed_commands)} commande(s) retirée(s) du rôle **{role.name}** ({role_name}): {commands_str}")
     else:
-        await ctx.send(f"ℹ️ Aucune commande retirée. Les commandes spécifiées n'étaient pas attribuées au rôle **{role_name}**.")
+        await ctx.send(f"ℹ️ Aucune commande retirée. Les commandes spécifiées n'étaient pas attribuées au rôle **{role.name}** ({role_name}).")
 
     # Afficher les commandes actuelles
     current_commands = ", ".join([f"`!{cmd}`" for cmd in CUSTOM_ROLES[role_name]["permissions"]]) if CUSTOM_ROLES[role_name]["permissions"] else "Aucune"
-    await ctx.send(f"📋 Commandes actuelles pour **{role_name}**: {current_commands}")
+    await ctx.send(f"📋 Commandes actuelles pour **{role.name}** ({role_name}): {current_commands}")
 
 # Commandes pour gérer les permissions des rôles
 @bot.command(name="permissions", aliases=["perms", "showanyperms", "showperms", "listperms"])
@@ -3516,128 +3711,305 @@ async def staff_permissions(ctx, role_type: str = None):
         await ctx.send("Une erreur s'est produite lors de l'affichage des permissions du staff. Veuillez réessayer.")
 
 @bot.command(name="addperm", aliases=["addanyperm"])
-async def add_permission(ctx, role_name: str = None, command: str = None):
+async def add_permission(ctx, role_input: str = None, command: str = None):
     """
     Ajoute une permission à un rôle (standard ou personnalisé).
 
     Usage:
-    !addperm <nom_du_role> <commande>
+    !addperm <nom_du_role ou @mention> <commande>
 
     Exemples:
     !addperm mod kick
     !addperm helper warn
     !addperm support mute
+    !addperm @Support ban
     """
     if not ctx.author.guild_permissions.administrator:
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
 
-    if not role_name or not command:
-        await ctx.send("❌ Usage: `!addperm <nom_du_role> <commande>`\n"
+    if not role_input or not command:
+        await ctx.send("❌ Usage: `!addperm <nom_du_role ou @mention> <commande>`\n"
                       "Exemples:\n"
                       "`!addperm mod kick` - Ajoute la commande kick au rôle modérateur\n"
                       "`!addperm helper warn` - Ajoute la commande warn au rôle helper\n"
-                      "`!addperm support mute` - Ajoute la commande mute au rôle personnalisé support")
+                      "`!addperm support mute` - Ajoute la commande mute au rôle personnalisé support\n"
+                      "`!addperm @Support ban` - Ajoute la commande ban au rôle mentionné")
         return
 
     # Supprimer le préfixe ! si présent
     if command.startswith("!"):
         command = command[1:]
 
-    role_name = role_name.lower()
+    # Trouver le rôle Discord et le nom dans la configuration
+    role = None
+    role_name = None
+    is_standard_role = False
 
-    # Vérifier si c'est un rôle standard (mod ou helper)
-    if role_name in ["mod", "helper"]:
+    # Vérifier d'abord si c'est un rôle standard (mod ou helper)
+    role_input_lower = role_input.lower()
+    if role_input_lower in ["mod", "helper"]:
+        role_name = role_input_lower
+        is_standard_role = True
+        role_id = MOD_ROLE_ID if role_name == "mod" else HELPER_ROLE_ID
+        role = discord.utils.get(ctx.guild.roles, id=role_id)
+    else:
+        # Vérifier si c'est une mention de rôle
+        if ctx.message.role_mentions:
+            role = ctx.message.role_mentions[0]
+
+            # Vérifier si c'est un rôle standard par ID
+            if role.id == MOD_ROLE_ID:
+                role_name = "mod"
+                is_standard_role = True
+            elif role.id == HELPER_ROLE_ID:
+                role_name = "helper"
+                is_standard_role = True
+            else:
+                # Chercher le nom du rôle dans la configuration
+                for custom_name, data in CUSTOM_ROLES.items():
+                    if data["id"] == role.id:
+                        role_name = custom_name
+                        break
+
+                # Si le rôle n'est pas dans la configuration, utiliser son nom comme identifiant
+                if not role_name:
+                    role_name = role.name.lower()
+        else:
+            # Chercher d'abord dans la configuration des rôles personnalisés
+            if role_input_lower in CUSTOM_ROLES:
+                role_name = role_input_lower
+                role_id = CUSTOM_ROLES[role_name]["id"]
+                role = discord.utils.get(ctx.guild.roles, id=role_id)
+            else:
+                # Chercher le rôle par nom
+                role = discord.utils.get(ctx.guild.roles, name=role_input)
+
+                # Si le rôle n'est pas trouvé, essayer de chercher de manière insensible à la casse
+                if not role:
+                    for guild_role in ctx.guild.roles:
+                        if guild_role.name.lower() == role_input.lower():
+                            role = guild_role
+                            break
+
+                if role:
+                    # Vérifier si c'est un rôle standard par ID
+                    if role.id == MOD_ROLE_ID:
+                        role_name = "mod"
+                        is_standard_role = True
+                    elif role.id == HELPER_ROLE_ID:
+                        role_name = "helper"
+                        is_standard_role = True
+                    else:
+                        # Chercher si ce rôle est déjà dans la configuration
+                        for custom_name, data in CUSTOM_ROLES.items():
+                            if data["id"] == role.id:
+                                role_name = custom_name
+                                break
+
+                        # Si le rôle n'est pas dans la configuration, utiliser son nom comme identifiant
+                        if not role_name:
+                            role_name = role.name.lower()
+
+    # Si le rôle n'est pas trouvé
+    if not role:
+        await ctx.send(f"❌ Le rôle **{role_input}** n'a pas été trouvé sur le serveur.")
+        return
+
+    # Vérifier si c'est un rôle protégé (owner ou admin)
+    if role.id == OWNER_ROLE_ID:
+        await ctx.send("⚠️ Le rôle propriétaire (owner) a déjà toutes les permissions et ne peut pas être modifié.")
+        return
+
+    if role.id == ADMIN_ROLE_ID:
+        await ctx.send("⚠️ Le rôle administrateur (admin) a déjà toutes les permissions et ne peut pas être modifié.")
+        return
+
+    # Vérifier si c'est un rôle par défaut (@everyone)
+    if role.is_default():
+        await ctx.send("⛔ Le rôle @everyone ne peut pas recevoir de permissions spécifiques.")
+        return
+
+    # Si c'est un rôle standard (mod ou helper)
+    if is_standard_role:
         # Vérifier si la commande existe déjà dans les permissions du rôle
         if command in role_permissions[role_name]["commands"]:
-            await ctx.send(f"⚠️ La commande `{command}` est déjà dans les permissions du rôle {role_name}.")
+            await ctx.send(f"⚠️ La commande `{command}` est déjà dans les permissions du rôle {role.name} ({role_name}).")
             return
 
         # Ajouter la commande aux permissions du rôle
         role_permissions[role_name]["commands"].append(command)
         save_permissions()
-        await ctx.send(f"✅ La commande `{command}` a été ajoutée aux permissions du rôle {role_name}.")
+        await ctx.send(f"✅ La commande `{command}` a été ajoutée aux permissions du rôle {role.name} ({role_name}).")
         return
 
-    # Vérifier si c'est un rôle personnalisé
+    # Si c'est un rôle personnalisé déjà dans la configuration
     if role_name in CUSTOM_ROLES:
         # Vérifier si la commande existe déjà dans les permissions du rôle
         if command in CUSTOM_ROLES[role_name]["permissions"]:
-            await ctx.send(f"⚠️ La commande `{command}` est déjà dans les permissions du rôle personnalisé {role_name}.")
+            await ctx.send(f"⚠️ La commande `{command}` est déjà dans les permissions du rôle {role.name} ({role_name}).")
             return
 
         # Ajouter la commande aux permissions du rôle
         CUSTOM_ROLES[role_name]["permissions"].append(command)
         save_config()
-        await ctx.send(f"✅ La commande `{command}` a été ajoutée aux permissions du rôle personnalisé {role_name}.")
+        await ctx.send(f"✅ La commande `{command}` a été ajoutée aux permissions du rôle {role.name} ({role_name}).")
         return
 
-    # Si on arrive ici, le rôle n'existe pas
-    await ctx.send(f"❌ Le rôle `{role_name}` n'existe pas dans la configuration.\n"
-                  f"Rôles standards disponibles: `mod`, `helper`\n"
-                  f"Rôles personnalisés disponibles: {', '.join([f'`{r}`' for r in CUSTOM_ROLES.keys()]) if CUSTOM_ROLES else 'Aucun'}")
+    # Si le rôle n'est pas encore dans la configuration, l'ajouter
+    CUSTOM_ROLES[role_name] = {
+        "id": role.id,
+        "permissions": [command]
+    }
+    save_config()
+    await ctx.send(f"✅ Le rôle **{role.name}** a été ajouté à la configuration sous le nom **{role_name}** avec la commande `{command}`.")
 
 @bot.command(name="removeperm", aliases=["removeanyperm"])
-async def remove_permission(ctx, role_name: str = None, command: str = None):
+async def remove_permission(ctx, role_input: str = None, command: str = None):
     """
     Retire une permission à un rôle (standard ou personnalisé).
 
     Usage:
-    !removeperm <nom_du_role> <commande>
+    !removeperm <nom_du_role ou @mention> <commande>
 
     Exemples:
     !removeperm mod kick
     !removeperm helper warn
     !removeperm support mute
+    !removeperm @Support ban
     """
     if not ctx.author.guild_permissions.administrator:
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
 
-    if not role_name or not command:
-        await ctx.send("❌ Usage: `!removeperm <nom_du_role> <commande>`\n"
+    if not role_input or not command:
+        await ctx.send("❌ Usage: `!removeperm <nom_du_role ou @mention> <commande>`\n"
                       "Exemples:\n"
                       "`!removeperm mod kick` - Retire la commande kick du rôle modérateur\n"
                       "`!removeperm helper warn` - Retire la commande warn du rôle helper\n"
-                      "`!removeperm support mute` - Retire la commande mute du rôle personnalisé support")
+                      "`!removeperm support mute` - Retire la commande mute du rôle personnalisé support\n"
+                      "`!removeperm @Support ban` - Retire la commande ban du rôle mentionné")
         return
 
     # Supprimer le préfixe ! si présent
     if command.startswith("!"):
         command = command[1:]
 
-    role_name = role_name.lower()
+    # Trouver le rôle Discord et le nom dans la configuration
+    role = None
+    role_name = None
+    is_standard_role = False
 
-    # Vérifier si c'est un rôle standard (mod ou helper)
-    if role_name in ["mod", "helper"]:
+    # Vérifier d'abord si c'est un rôle standard (mod ou helper)
+    role_input_lower = role_input.lower()
+    if role_input_lower in ["mod", "helper"]:
+        role_name = role_input_lower
+        is_standard_role = True
+        role_id = MOD_ROLE_ID if role_name == "mod" else HELPER_ROLE_ID
+        role = discord.utils.get(ctx.guild.roles, id=role_id)
+    else:
+        # Vérifier si c'est une mention de rôle
+        if ctx.message.role_mentions:
+            role = ctx.message.role_mentions[0]
+
+            # Vérifier si c'est un rôle standard par ID
+            if role.id == MOD_ROLE_ID:
+                role_name = "mod"
+                is_standard_role = True
+            elif role.id == HELPER_ROLE_ID:
+                role_name = "helper"
+                is_standard_role = True
+            else:
+                # Chercher le nom du rôle dans la configuration
+                for custom_name, data in CUSTOM_ROLES.items():
+                    if data["id"] == role.id:
+                        role_name = custom_name
+                        break
+
+                # Si le rôle n'est pas dans la configuration
+                if not role_name:
+                    await ctx.send(f"❌ Le rôle **{role.name}** n'est pas configuré avec des permissions.")
+                    return
+        else:
+            # Chercher d'abord dans la configuration des rôles personnalisés
+            if role_input_lower in CUSTOM_ROLES:
+                role_name = role_input_lower
+                role_id = CUSTOM_ROLES[role_name]["id"]
+                role = discord.utils.get(ctx.guild.roles, id=role_id)
+            else:
+                # Chercher le rôle par nom
+                role = discord.utils.get(ctx.guild.roles, name=role_input)
+
+                # Si le rôle n'est pas trouvé, essayer de chercher de manière insensible à la casse
+                if not role:
+                    for guild_role in ctx.guild.roles:
+                        if guild_role.name.lower() == role_input.lower():
+                            role = guild_role
+                            break
+
+                if role:
+                    # Vérifier si c'est un rôle standard par ID
+                    if role.id == MOD_ROLE_ID:
+                        role_name = "mod"
+                        is_standard_role = True
+                    elif role.id == HELPER_ROLE_ID:
+                        role_name = "helper"
+                        is_standard_role = True
+                    else:
+                        # Chercher si ce rôle est déjà dans la configuration
+                        for custom_name, data in CUSTOM_ROLES.items():
+                            if data["id"] == role.id:
+                                role_name = custom_name
+                                break
+
+                        # Si le rôle n'est pas dans la configuration
+                        if not role_name:
+                            await ctx.send(f"❌ Le rôle **{role.name}** n'est pas configuré avec des permissions.")
+                            return
+
+    # Si le rôle n'est pas trouvé ou n'est pas dans la configuration
+    if not role or not role_name:
+        await ctx.send(f"❌ Le rôle **{role_input}** n'a pas été trouvé ou n'est pas configuré avec des permissions.")
+        return
+
+    # Vérifier si c'est un rôle protégé (owner ou admin)
+    if role.id == OWNER_ROLE_ID:
+        await ctx.send("⚠️ Le rôle propriétaire (owner) a toutes les permissions par défaut et ne peut pas être modifié.")
+        return
+
+    if role.id == ADMIN_ROLE_ID:
+        await ctx.send("⚠️ Le rôle administrateur (admin) a toutes les permissions par défaut et ne peut pas être modifié.")
+        return
+
+    # Si c'est un rôle standard (mod ou helper)
+    if is_standard_role:
         # Vérifier si la commande existe dans les permissions du rôle
         if command not in role_permissions[role_name]["commands"]:
-            await ctx.send(f"⚠️ La commande `{command}` n'est pas dans les permissions du rôle {role_name}.")
+            await ctx.send(f"⚠️ La commande `{command}` n'est pas dans les permissions du rôle {role.name} ({role_name}).")
             return
 
         # Retirer la commande des permissions du rôle
         role_permissions[role_name]["commands"].remove(command)
         save_permissions()
-        await ctx.send(f"✅ La commande `{command}` a été retirée des permissions du rôle {role_name}.")
+        await ctx.send(f"✅ La commande `{command}` a été retirée des permissions du rôle {role.name} ({role_name}).")
         return
 
-    # Vérifier si c'est un rôle personnalisé
+    # Si c'est un rôle personnalisé
     if role_name in CUSTOM_ROLES:
         # Vérifier si la commande existe dans les permissions du rôle
         if command not in CUSTOM_ROLES[role_name]["permissions"]:
-            await ctx.send(f"⚠️ La commande `{command}` n'est pas dans les permissions du rôle personnalisé {role_name}.")
+            await ctx.send(f"⚠️ La commande `{command}` n'est pas dans les permissions du rôle {role.name} ({role_name}).")
             return
 
         # Retirer la commande des permissions du rôle
         CUSTOM_ROLES[role_name]["permissions"].remove(command)
         save_config()
-        await ctx.send(f"✅ La commande `{command}` a été retirée des permissions du rôle personnalisé {role_name}.")
-        return
+        await ctx.send(f"✅ La commande `{command}` a été retirée des permissions du rôle {role.name} ({role_name}).")
 
-    # Si on arrive ici, le rôle n'existe pas
-    await ctx.send(f"❌ Le rôle `{role_name}` n'existe pas dans la configuration.\n"
-                  f"Rôles standards disponibles: `mod`, `helper`\n"
-                  f"Rôles personnalisés disponibles: {', '.join([f'`{r}`' for r in CUSTOM_ROLES.keys()]) if CUSTOM_ROLES else 'Aucun'}")
+        # Si le rôle n'a plus de permissions, demander si l'utilisateur veut le supprimer de la configuration
+        if not CUSTOM_ROLES[role_name]["permissions"]:
+            await ctx.send(f"ℹ️ Le rôle **{role.name}** ({role_name}) n'a plus aucune permission. Utilisez `!delrole {role_name}` si vous souhaitez le supprimer complètement.")
+        return
 
 @bot.command(name="resetperms")
 async def reset_permissions(ctx, role_type: str = None):

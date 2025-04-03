@@ -1431,6 +1431,13 @@ async def commands(ctx):
     ]
     embed.add_field(name="✅ Système de vérification", value="\n".join(verification_commands), inline=False)
 
+    # Commandes de giveaway
+    giveaway_commands = [
+        "`!giveaway <durée_en_secondes> <prix>` - Crée un giveaway basé sur le temps",
+        "`!giveaway m:<nombre_membres> <prix>` - Crée un giveaway qui se termine quand le serveur atteint un certain nombre de membres"
+    ]
+    embed.add_field(name="🎁 Système de giveaway", value="\n".join(giveaway_commands), inline=False)
+
     # Note: Les commandes suivantes ne sont pas encore implémentées ou sont en cours de développement
 
     # Commandes de règlement

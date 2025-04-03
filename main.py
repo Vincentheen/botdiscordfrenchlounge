@@ -19,20 +19,30 @@ LOG_TICKET_ID = 1357112024483631246
 LOG_FLUX_ID = 1357125840982249644
 LOG_JOIN_LEAVE_ID = 1357111972486840472  # ID du canal pour les logs d'arrivées/départs
 MUTE_ROLE_ID = 1357046834048139457
-ADMIN_ROLE_ID = 1354892680735227911
+
+# IDs des rôles de staff
+ADMIN_ROLE_ID = 1354892680735227911    # Administrateur
+MOD_ROLE_ID = 1354900001565966337                        # Modérateur (remplacez par l'ID réel)
+HELPER_ROLE_ID = 1354899626997579807                    # Helper (remplacez par l'ID réel)
+
 ROLE_JOIN_ID = 1357113117561192478
 GIVEAWAY_WINNER_ROLE_ID = 1357113189762076692
 AUTO_ROLE_ID = 1354904148570542273
 WELCOME_CHANNEL_ID = 1357046834874421496
 GUILD_ID = 1354892680722911405 # ID du serveur
 
-# Fichier pour stocker les IDs des canaux configurables
+
+# Fichiers de configuration
 CONFIG_FILE = 'config.json'
+PERMISSIONS_FILE = 'permissions.json'
 
 # Fonction pour sauvegarder la configuration
 def save_config():
     config = {
-        'LOG_JOIN_LEAVE_ID': LOG_JOIN_LEAVE_ID
+        'LOG_JOIN_LEAVE_ID': LOG_JOIN_LEAVE_ID,
+        'ADMIN_ROLE_ID': ADMIN_ROLE_ID,
+        'MOD_ROLE_ID': MOD_ROLE_ID,
+        'HELPER_ROLE_ID': HELPER_ROLE_ID
     }
     try:
         with open(CONFIG_FILE, 'w') as f:
@@ -44,11 +54,14 @@ def save_config():
 
 # Fonction pour charger la configuration
 def load_config():
-    global LOG_JOIN_LEAVE_ID
+    global LOG_JOIN_LEAVE_ID, ADMIN_ROLE_ID, MOD_ROLE_ID, HELPER_ROLE_ID
     try:
         with open(CONFIG_FILE, 'r') as f:
             config = json.load(f)
             LOG_JOIN_LEAVE_ID = config.get('LOG_JOIN_LEAVE_ID', LOG_JOIN_LEAVE_ID)
+            ADMIN_ROLE_ID = config.get('ADMIN_ROLE_ID', ADMIN_ROLE_ID)
+            MOD_ROLE_ID = config.get('MOD_ROLE_ID', MOD_ROLE_ID)
+            HELPER_ROLE_ID = config.get('HELPER_ROLE_ID', HELPER_ROLE_ID)
         return True
     except FileNotFoundError:
         print("Fichier de configuration non trouvé, utilisation des valeurs par défaut")
@@ -57,8 +70,57 @@ def load_config():
         print(f"Erreur lors du chargement de la configuration: {e}")
         return False
 
+# Fonction pour sauvegarder les permissions des rôles
+def save_permissions():
+    try:
+        with open(PERMISSIONS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(role_permissions, f, ensure_ascii=False, indent=4)
+        print("Permissions des rôles sauvegardées avec succès")
+        return True
+    except Exception as e:
+        print(f"Erreur lors de la sauvegarde des permissions des rôles: {e}")
+        return False
+
+# Fonction pour charger les permissions des rôles
+def load_permissions():
+    global role_permissions
+    try:
+        with open(PERMISSIONS_FILE, 'r', encoding='utf-8') as f:
+            loaded_permissions = json.load(f)
+
+            # Vérifier que les clés de base existent
+            if "mod" not in loaded_permissions:
+                loaded_permissions["mod"] = role_permissions["mod"]
+                print("Clé 'mod' ajoutée aux permissions avec les valeurs par défaut")
+
+            if "helper" not in loaded_permissions:
+                loaded_permissions["helper"] = role_permissions["helper"]
+                print("Clé 'helper' ajoutée aux permissions avec les valeurs par défaut")
+
+            # S'assurer que chaque rôle a les champs nécessaires
+            for role_key in ["mod", "helper"]:
+                if "commands" not in loaded_permissions[role_key]:
+                    loaded_permissions[role_key]["commands"] = role_permissions[role_key]["commands"]
+                    print(f"Champ 'commands' ajouté au rôle {role_key} avec les valeurs par défaut")
+
+                if "description" not in loaded_permissions[role_key]:
+                    loaded_permissions[role_key]["description"] = role_permissions[role_key]["description"]
+                    print(f"Champ 'description' ajouté au rôle {role_key} avec les valeurs par défaut")
+
+            role_permissions = loaded_permissions
+        print("Permissions des rôles chargées avec succès")
+        return True
+    except FileNotFoundError:
+        print("Fichier de permissions non trouvé, utilisation des valeurs par défaut")
+        save_permissions()  # Créer le fichier avec les valeurs par défaut
+        return False
+    except Exception as e:
+        print(f"Erreur lors du chargement des permissions des rôles: {e}")
+        return False
+
 # Charger la configuration au démarrage
 load_config()
+load_permissions()
 
 
 
@@ -85,6 +147,25 @@ reglement = {
     "message_id": None,  # ID du message de règlement
     "rules": [],         # Liste des règles
     "banner_url": "hhttps://media.discordapp.net/attachments/1356391472869544138/1357094017006960790/glace.webp?ex=67eef3cb&is=67eda24b&hm=07365bbd9febea82e5cde3c098ce5c26f7f4b19830d18a91844a8476edfdbb14&=&format=webp&width=701&height=701"  # URL de la bannière du règlement
+}
+
+# Dictionnaire pour stocker les permissions des rôles
+role_permissions = {
+    "mod": {
+        "commands": [
+            "kick", "mute", "unmute", "warn", "clearwarns", "clear",
+            "addrole", "removerole", "addword", "removeword", "listwords",
+            "renameticket", "addmember", "removemember", "listtickets"
+        ],
+        "description": "Modérateurs du serveur"
+    },
+    "helper": {
+        "commands": [
+            "warn", "mute", "unmute", "clear", "listwords",
+            "renameticket", "addmember", "removemember", "listtickets"
+        ],
+        "description": "Assistants de modération"
+    }
 }
 
 # Fonction pour sauvegarder le règlement dans un fichier JSON
@@ -139,6 +220,25 @@ tickets = {}
 
 # Cette fonction a été fusionnée avec l'autre définition de on_member_join plus bas dans le code
 # Voir lignes ~860
+
+# Fonction pour vérifier si un utilisateur a la permission d'utiliser une commande
+def has_permission(member, command_name):
+    # Les administrateurs ont toutes les permissions
+    if member.guild_permissions.administrator:
+        return True
+
+    # Vérifier si l'utilisateur a le rôle de modérateur
+    mod_role = discord.utils.get(member.guild.roles, id=MOD_ROLE_ID)
+    if mod_role and mod_role in member.roles:
+        return command_name in role_permissions["mod"]["commands"]
+
+    # Vérifier si l'utilisateur a le rôle de helper
+    helper_role = discord.utils.get(member.guild.roles, id=HELPER_ROLE_ID)
+    if helper_role and helper_role in member.roles:
+        return command_name in role_permissions["helper"]["commands"]
+
+    # Par défaut, l'utilisateur n'a pas la permission
+    return False
 
 # Fonction pour journaliser les actions
 async def log_action(ctx, action, member, role=None, reason=None):
@@ -1383,16 +1483,17 @@ async def mute(ctx,
               *,
               reason: str = "Aucune raison spécifiée"):
     """Mute un utilisateur et lui attribue le rôle mute."""
+    # Vérifier les permissions avec le nouveau système
+    if not has_permission(ctx.author, "mute"):
+        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
+        return
+
     # Vérifier si le membre a le rôle administrateur
     admin_role = discord.utils.get(member.guild.roles, id=ADMIN_ROLE_ID)
     if admin_role in member.roles:
         await ctx.send("❌ Tu ne peux pas mute un administrateur.")
         return
 
-    if not ctx.author.guild_permissions.manage_roles:
-        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
-        return
-                  
     mute_role = discord.utils.get(ctx.guild.roles, id=MUTE_ROLE_ID)
     if not mute_role:
         await ctx.send("❌ Le rôle mute est introuvable.")
@@ -1415,14 +1516,15 @@ async def mute(ctx,
 @bot.command()
 async def unmute(ctx, member: discord.Member):
     """Unmute un utilisateur et lui retire le rôle mute."""
+    # Vérifier les permissions avec le nouveau système
+    if not has_permission(ctx.author, "unmute"):
+        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
+        return
+
     # Vérifier si le membre a le rôle administrateur
     admin_role = discord.utils.get(member.guild.roles, id=ADMIN_ROLE_ID)
     if admin_role in member.roles:
         await ctx.send("❌ Tu ne peux pas unmute un administrateur.")
-        return
-
-    if not ctx.author.guild_permissions.manage_roles:
-        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
 
     mute_role = discord.utils.get(ctx.guild.roles, id=MUTE_ROLE_ID)
@@ -1697,12 +1799,24 @@ async def check_setup(ctx):
     # Vérifier les rôles
     mute_role = discord.utils.get(ctx.guild.roles, id=MUTE_ROLE_ID)
     admin_role = discord.utils.get(ctx.guild.roles, id=ADMIN_ROLE_ID)
+    mod_role = discord.utils.get(ctx.guild.roles, id=MOD_ROLE_ID)
+    helper_role = discord.utils.get(ctx.guild.roles, id=HELPER_ROLE_ID)
     join_role = discord.utils.get(ctx.guild.roles, id=ROLE_JOIN_ID)
     giveaway_role = discord.utils.get(ctx.guild.roles, id=GIVEAWAY_WINNER_ROLE_ID)
+
+    # Rôles de modération
     embed.add_field(
-        name="👑 Rôles",
-        value=f"Rôle mute (ID: {MUTE_ROLE_ID}): {'✅' if mute_role else '❌'}\n"
-              f"Rôle admin (ID: {ADMIN_ROLE_ID}): {'✅' if admin_role else '❌'}\n"
+        name="👑 Rôles de staff",
+        value=f"Rôle administrateur (ID: {ADMIN_ROLE_ID}): {'✅' if mod_role else '❌'}\n"
+              f"Rôle helper (ID: {HELPER_ROLE_ID}): {'✅' if helper_role else '❌'}\n"
+              f"Rôle mute (ID: {MUTE_ROLE_ID}): {'✅' if mute_role else '❌'}",
+        inline=False
+    )
+
+    # Autres rôles
+    embed.add_field(
+        name="🏷️ Autres rôles",
+        value=f"Rôle modérateur (ID: {MOD_ROLE_ID}): {'✅' if admin_role else '❌'}\n"
               f"Rôle join (ID: {ROLE_JOIN_ID}): {'✅' if join_role else '❌'}\n"
               f"Rôle giveaway (ID: {GIVEAWAY_WINNER_ROLE_ID}): {'✅' if giveaway_role else '❌'}",
         inline=False
@@ -2523,6 +2637,232 @@ async def on_guild_update(before, after):
 
         # Envoyer l'embed dans le canal de logs
         await log_channel.send(embed=embed)
+
+# Commandes pour configurer les rôles de staff
+@bot.command(name="setadminrole")
+async def set_admin_role(ctx, role: discord.Role = None):
+    """Définit le rôle d'administrateur."""
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
+        return
+
+    if role is None:
+        await ctx.send("❌ Usage: `!setadminrole @role`")
+        return
+
+    global ADMIN_ROLE_ID
+    ADMIN_ROLE_ID = role.id
+    save_config()
+
+    await ctx.send(f"✅ Le rôle d'administrateur a été défini sur {role.mention} (ID: {role.id}).")
+
+@bot.command(name="setmodrole")
+async def set_mod_role(ctx, role: discord.Role = None):
+    """Définit le rôle de modérateur."""
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
+        return
+
+    if role is None:
+        await ctx.send("❌ Usage: `!setmodrole @role`")
+        return
+
+    global MOD_ROLE_ID
+    MOD_ROLE_ID = role.id
+    save_config()
+
+    await ctx.send(f"✅ Le rôle de modérateur a été défini sur {role.mention} (ID: {role.id}).")
+
+@bot.command(name="sethelperrole")
+async def set_helper_role(ctx, role: discord.Role = None):
+    """Définit le rôle de helper."""
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
+        return
+
+    if role is None:
+        await ctx.send("❌ Usage: `!sethelperrole @role`")
+        return
+
+    global HELPER_ROLE_ID
+    HELPER_ROLE_ID = role.id
+    save_config()
+
+    await ctx.send(f"✅ Le rôle de helper a été défini sur {role.mention} (ID: {role.id}).")
+
+# Commandes pour gérer les permissions des rôles
+@bot.command(name="permissions")
+async def show_permissions(ctx, role_type: str = None):
+    """Affiche les permissions d'un rôle (mod/helper) ou de tous les rôles."""
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
+        return
+
+    if role_type and role_type.lower() not in ["mod", "helper"]:
+        await ctx.send("❌ Type de rôle invalide. Utilisez `mod` ou `helper`.")
+        return
+
+    embed = discord.Embed(
+        title="🔒 Permissions des rôles",
+        color=discord.Color.blue(),
+        timestamp=discord.utils.utcnow()
+    )
+
+    if role_type:
+        # Afficher les permissions d'un rôle spécifique
+        role_key = role_type.lower()
+        role_data = role_permissions[role_key]
+
+        # Obtenir le rôle Discord correspondant
+        role_id = MOD_ROLE_ID if role_key == "mod" else HELPER_ROLE_ID
+        role = discord.utils.get(ctx.guild.roles, id=role_id)
+        role_mention = role.mention if role else f"Rôle {role_key} (non configuré)"
+
+        embed.description = f"Permissions pour {role_mention}\n{role_data['description']}"
+
+        # Diviser les commandes en groupes de 15 pour éviter de dépasser la limite de caractères
+        commands = role_data["commands"]
+        chunks = [commands[i:i+15] for i in range(0, len(commands), 15)]
+
+        for i, chunk in enumerate(chunks):
+            embed.add_field(
+                name=f"Commandes {i+1}" if i > 0 else "Commandes",
+                value="```\n" + "\n".join([f"!{cmd}" for cmd in chunk]) + "```",
+                inline=False
+            )
+    else:
+        # Afficher les permissions de tous les rôles
+        for role_key, role_data in role_permissions.items():
+            # Obtenir le rôle Discord correspondant
+            role_id = MOD_ROLE_ID if role_key == "mod" else HELPER_ROLE_ID
+            role = discord.utils.get(ctx.guild.roles, id=role_id)
+            role_mention = role.mention if role else f"Rôle {role_key} (non configuré)"
+
+            # Créer une liste formatée des commandes
+            commands_list = ", ".join([f"`!{cmd}`" for cmd in role_data["commands"][:10]])
+            if len(role_data["commands"]) > 10:
+                commands_list += f" et {len(role_data['commands']) - 10} autres..."
+
+            embed.add_field(
+                name=f"📋 {role_key.capitalize()} ({role_mention})",
+                value=f"{role_data['description']}\n**Commandes**: {commands_list}",
+                inline=False
+            )
+
+        embed.set_footer(text="Utilisez !permissions mod ou !permissions helper pour voir toutes les commandes d'un rôle spécifique")
+
+    await ctx.send(embed=embed)
+
+@bot.command(name="addperm")
+async def add_permission(ctx, role_type: str = None, command: str = None):
+    """Ajoute une permission à un rôle (mod/helper)."""
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
+        return
+
+    if not role_type or not command:
+        await ctx.send("❌ Usage: `!addperm <mod/helper> <commande>`")
+        return
+
+    if role_type.lower() not in ["mod", "helper"]:
+        await ctx.send("❌ Type de rôle invalide. Utilisez `mod` ou `helper`.")
+        return
+
+    # Supprimer le préfixe ! si présent
+    if command.startswith("!"):
+        command = command[1:]
+
+    role_key = role_type.lower()
+
+    # Vérifier si la commande existe déjà dans les permissions du rôle
+    if command in role_permissions[role_key]["commands"]:
+        await ctx.send(f"⚠️ La commande `{command}` est déjà dans les permissions du rôle {role_key}.")
+        return
+
+    # Ajouter la commande aux permissions du rôle
+    role_permissions[role_key]["commands"].append(command)
+    save_permissions()
+
+    await ctx.send(f"✅ La commande `{command}` a été ajoutée aux permissions du rôle {role_key}.")
+
+@bot.command(name="removeperm")
+async def remove_permission(ctx, role_type: str = None, command: str = None):
+    """Retire une permission à un rôle (mod/helper)."""
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
+        return
+
+    if not role_type or not command:
+        await ctx.send("❌ Usage: `!removeperm <mod/helper> <commande>`")
+        return
+
+    if role_type.lower() not in ["mod", "helper"]:
+        await ctx.send("❌ Type de rôle invalide. Utilisez `mod` ou `helper`.")
+        return
+
+    # Supprimer le préfixe ! si présent
+    if command.startswith("!"):
+        command = command[1:]
+
+    role_key = role_type.lower()
+
+    # Vérifier si la commande existe dans les permissions du rôle
+    if command not in role_permissions[role_key]["commands"]:
+        await ctx.send(f"⚠️ La commande `{command}` n'est pas dans les permissions du rôle {role_key}.")
+        return
+
+    # Retirer la commande des permissions du rôle
+    role_permissions[role_key]["commands"].remove(command)
+    save_permissions()
+
+    await ctx.send(f"✅ La commande `{command}` a été retirée des permissions du rôle {role_key}.")
+
+@bot.command(name="resetperms")
+async def reset_permissions(ctx, role_type: str = None):
+    """Réinitialise les permissions d'un rôle (mod/helper) ou de tous les rôles."""
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
+        return
+
+    global role_permissions
+
+    # Sauvegarder les permissions actuelles pour pouvoir les restaurer si nécessaire
+    old_permissions = role_permissions.copy()
+
+    if role_type and role_type.lower() not in ["mod", "helper", "all"]:
+        await ctx.send("❌ Type de rôle invalide. Utilisez `mod`, `helper` ou `all`.")
+        return
+
+    # Définir les permissions par défaut
+    default_permissions = {
+        "mod": {
+            "commands": [
+                "kick", "mute", "unmute", "warn", "clearwarns", "clear",
+                "addrole", "removerole", "addword", "removeword", "listwords",
+                "renameticket", "addmember", "removemember", "listtickets"
+            ],
+            "description": "Modérateurs du serveur"
+        },
+        "helper": {
+            "commands": [
+                "warn", "mute", "unmute", "clear", "listwords",
+                "renameticket", "addmember", "removemember", "listtickets"
+            ],
+            "description": "Assistants de modération"
+        }
+    }
+
+    if not role_type or role_type.lower() == "all":
+        # Réinitialiser toutes les permissions
+        role_permissions = default_permissions.copy()
+        save_permissions()
+        await ctx.send("✅ Toutes les permissions des rôles ont été réinitialisées aux valeurs par défaut.")
+    else:
+        # Réinitialiser les permissions d'un rôle spécifique
+        role_key = role_type.lower()
+        role_permissions[role_key] = default_permissions[role_key].copy()
+        save_permissions()
+        await ctx.send(f"✅ Les permissions du rôle {role_key} ont été réinitialisées aux valeurs par défaut.")
 
 # Lancement du bot
 keep_alive()

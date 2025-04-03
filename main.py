@@ -2813,10 +2813,8 @@ async def show_permissions(ctx, role_type: str = None):
             role = discord.utils.get(ctx.guild.roles, id=role_id)
             role_mention = role.mention if role else f"Rôle {role_key} (non configuré)"
 
-            # Créer une liste formatée des commandes
-            commands_list = ", ".join([f"`!{cmd}`" for cmd in role_data["commands"][:10]])
-            if len(role_data["commands"]) > 10:
-                commands_list += f" et {len(role_data['commands']) - 10} autres..."
+            # Créer une liste formatée de toutes les commandes sans résumé
+            commands_list = ", ".join([f"`!{cmd}`" for cmd in role_data["commands"]])
 
             embed.add_field(
                 name=f"📋 {role_key.capitalize()} ({role_mention})",
@@ -3013,10 +3011,8 @@ async def staff_permissions(ctx, role_type: str = None):
             inline=False
         )
 
-        # Modérateur
-        mod_commands_preview = ", ".join([f"`!{cmd}`" for cmd in role_permissions["mod"]["commands"][:5]])
-        if len(role_permissions["mod"]["commands"]) > 5:
-            mod_commands_preview += f" et {len(role_permissions['mod']['commands']) - 5} autres..."
+        # Modérateur - Afficher toutes les commandes sans résumé
+        mod_commands_preview = ", ".join([f"`!{cmd}`" for cmd in role_permissions["mod"]["commands"]])
 
         embed.add_field(
             name=f"🔰 Modérateur ({mod_mention})",
@@ -3027,10 +3023,8 @@ async def staff_permissions(ctx, role_type: str = None):
             inline=False
         )
 
-        # Helper
-        helper_commands_preview = ", ".join([f"`!{cmd}`" for cmd in role_permissions["helper"]["commands"][:5]])
-        if len(role_permissions["helper"]["commands"]) > 5:
-            helper_commands_preview += f" et {len(role_permissions['helper']['commands']) - 5} autres..."
+        # Helper - Afficher toutes les commandes sans résumé
+        helper_commands_preview = ", ".join([f"`!{cmd}`" for cmd in role_permissions["helper"]["commands"]])
 
         embed.add_field(
             name=f"🔹 Helper ({helper_mention})",

@@ -1258,15 +1258,7 @@ async def on_reaction_add(reaction, user):
             giveaway_data["participants"].add(user)
             print(f"{user.name} a participé au giveaway.")
 
-@bot.event
-async def on_message(message):
-    if message.author == bot.user:
-        return
 
-    # Vérifier si l'utilisateur est celui avec l'ID spécifique
-    if message.author.id == 1264702434433961994:
-        await message.channel.send("Ta gueule")
-        # On continue le traitement normal du message
 
        
     # Vérifier si l'utilisateur a un rôle de staff (propriétaire ou administrateur)

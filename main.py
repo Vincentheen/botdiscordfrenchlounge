@@ -1382,28 +1382,20 @@ async def commands(ctx):
     ]
 
     staff_commands_2 = [
-        "`!addrolecommand <nom> commandes...` - Ajoute des commandes à un rôle",
-        "`!removerolecommand <nom> commandes...` - Retire des commandes d'un rôle",
-        "`!staffperms [owner/admin/mod/helper]` - Affiche les permissions détaillées",
-        "`!permissions [mod/helper]` - Affiche les permissions des rôles",
-        "`!addperm <mod/helper> <commande>` - Ajoute une permission à un rôle standard",
-        "`!removeperm <mod/helper> <commande>` - Retire une permission",
+        "`!addrolecommand <nom> commandes...` - Ajoute des commandes à un rôle personnalisé",
+        "`!removerolecommand <nom> commandes...` - Retire des commandes d'un rôle personnalisé",
+        "`!staffperms [owner/admin/mod/helper]` - Affiche les permissions détaillées du staff",
+        "`!permissions [nom_du_role]` - Affiche les permissions d'un rôle (standard ou personnalisé)",
+        "`!perms [nom_du_role]` - Alias de permissions",
+        "`!addperm <nom_du_role> <commande>` - Ajoute une permission à un rôle",
+        "`!removeperm <nom_du_role> <commande>` - Retire une permission d'un rôle",
         "`!resetperms [mod/helper/all]` - Réinitialise les permissions"
-    ]
-
-    staff_commands_3 = [
-        "`!addanyperm <nom_du_role> <commande>` - Ajoute une permission à n'importe quel rôle",
-        "`!removeanyperm <nom_du_role> <commande>` - Retire une permission de n'importe quel rôle",
-        "`!showanyperms [nom_du_role]` - Affiche les permissions de n'importe quel rôle",
-        "`!showperms [nom_du_role]` - Alias de showanyperms",
-        "`!listperms [nom_du_role]` - Alias de showanyperms"
     ]
 
     # N'afficher les commandes de gestion des rôles de staff qu'aux propriétaires et administrateurs
     if owner_role or admin_role:
-        embed.add_field(name="👑 Gestion des rôles (1/3)", value="\n".join(staff_commands_1), inline=False)
-        embed.add_field(name="👑 Gestion des rôles (2/3)", value="\n".join(staff_commands_2), inline=False)
-        embed.add_field(name="👑 Gestion des rôles (3/3)", value="\n".join(staff_commands_3), inline=False)
+        embed.add_field(name="👑 Gestion des rôles (1/2)", value="\n".join(staff_commands_1), inline=False)
+        embed.add_field(name="👑 Gestion des rôles (2/2)", value="\n".join(staff_commands_2), inline=False)
 
     # Commandes de modération
     mod_commands = [
@@ -3024,7 +3016,8 @@ async def add_role_command(ctx, role_name: str = None, *commands):
         await ctx.send("❌ Usage: `!addrolecommand <nom_du_role> commande1 commande2 ...`")
         return
 
-    global CUSTOM_ROLES
+    # Vérifier si le rôle existe
+    role_name = role_name.lower()
     if role_name not in CUSTOM_ROLES:
         await ctx.send(f"❌ Le rôle personnalisé **{role_name}** n'existe pas. Utilisez `!setrole` pour le créer d'abord.")
         return
@@ -3032,6 +3025,11 @@ async def add_role_command(ctx, role_name: str = None, *commands):
     # Ajouter les nouvelles commandes
     added_commands = []
     for cmd in commands:
+        # Supprimer le préfixe ! si présent
+        if cmd.startswith("!"):
+            cmd = cmd[1:]
+
+        # Ajouter la commande si elle n'existe pas déjà
         if cmd not in CUSTOM_ROLES[role_name]["permissions"]:
             CUSTOM_ROLES[role_name]["permissions"].append(cmd)
             added_commands.append(cmd)
@@ -3065,7 +3063,8 @@ async def remove_role_command(ctx, role_name: str = None, *commands):
         await ctx.send("❌ Usage: `!removerolecommand <nom_du_role> commande1 commande2 ...`")
         return
 
-    global CUSTOM_ROLES
+    # Vérifier si le rôle existe
+    role_name = role_name.lower()
     if role_name not in CUSTOM_ROLES:
         await ctx.send(f"❌ Le rôle personnalisé **{role_name}** n'existe pas.")
         return
@@ -3073,6 +3072,11 @@ async def remove_role_command(ctx, role_name: str = None, *commands):
     # Retirer les commandes
     removed_commands = []
     for cmd in commands:
+        # Supprimer le préfixe ! si présent
+        if cmd.startswith("!"):
+            cmd = cmd[1:]
+
+        # Retirer la commande si elle existe
         if cmd in CUSTOM_ROLES[role_name]["permissions"]:
             CUSTOM_ROLES[role_name]["permissions"].remove(cmd)
             removed_commands.append(cmd)
@@ -3091,37 +3095,78 @@ async def remove_role_command(ctx, role_name: str = None, *commands):
     await ctx.send(f"📋 Commandes actuelles pour **{role_name}**: {current_commands}")
 
 # Commandes pour gérer les permissions des rôles
-@bot.command(name="permissions", aliases=["perms"])
-async def show_permissions(ctx, role_type: str = None):
-    """Affiche les permissions d'un rôle (mod/helper) ou de tous les rôles."""
+@bot.command(name="permissions", aliases=["perms", "showanyperms", "showperms", "listperms"])
+async def show_permissions(ctx, role_name: str = None):
+    """
+    Affiche les permissions d'un rôle (standard ou personnalisé).
+
+    Usage:
+    !permissions [nom_du_role]
+
+    Exemples:
+    !permissions mod
+    !permissions helper
+    !permissions support
+    """
     if not ctx.author.guild_permissions.administrator:
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
 
-    if role_type and role_type.lower() not in ["mod", "helper"]:
-        await ctx.send("❌ Type de rôle invalide. Utilisez `mod` ou `helper`.")
+    # Si aucun rôle n'est spécifié, afficher la liste des rôles disponibles
+    if not role_name:
+        embed = discord.Embed(
+            title="🔑 Rôles disponibles",
+            description="Voici la liste des rôles dont vous pouvez consulter les permissions :",
+            color=discord.Color.blue(),
+            timestamp=discord.utils.utcnow()
+        )
+
+        # Rôles standards
+        standard_roles = ["mod", "helper"]
+        embed.add_field(
+            name="Rôles standards",
+            value="\n".join([f"- `{role}`" for role in standard_roles]),
+            inline=False
+        )
+
+        # Rôles personnalisés
+        if CUSTOM_ROLES:
+            embed.add_field(
+                name="Rôles personnalisés",
+                value="\n".join([f"- `{role}`" for role in CUSTOM_ROLES.keys()]),
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="Rôles personnalisés",
+                value="Aucun rôle personnalisé configuré",
+                inline=False
+            )
+
+        embed.set_footer(text="Utilisez !permissions <nom_du_role> pour voir les permissions d'un rôle spécifique")
+        await ctx.send(embed=embed)
         return
 
+    role_name = role_name.lower()
+
+    # Créer l'embed de base
     embed = discord.Embed(
-        title="🔒 Permissions des rôles",
+        title=f"🔒 Permissions du rôle {role_name}",
         color=discord.Color.blue(),
         timestamp=discord.utils.utcnow()
     )
 
-    if role_type:
-        # Afficher les permissions d'un rôle spécifique
-        role_key = role_type.lower()
-        role_data = role_permissions[role_key]
-
+    # Vérifier si c'est un rôle standard (mod ou helper)
+    if role_name in ["mod", "helper"]:
         # Obtenir le rôle Discord correspondant
-        role_id = MOD_ROLE_ID if role_key == "mod" else HELPER_ROLE_ID
+        role_id = MOD_ROLE_ID if role_name == "mod" else HELPER_ROLE_ID
         role = discord.utils.get(ctx.guild.roles, id=role_id)
-        role_mention = role.mention if role else f"Rôle {role_key} (non configuré)"
+        role_mention = role.mention if role else f"Rôle {role_name} (non configuré)"
 
-        embed.description = f"Permissions pour {role_mention}\n{role_data['description']}"
+        embed.description = f"Permissions pour {role_mention}\n{role_permissions[role_name]['description']}"
 
         # Diviser les commandes en groupes de 15 pour éviter de dépasser la limite de caractères
-        commands = role_data["commands"]
+        commands = role_permissions[role_name]["commands"]
         chunks = [commands[i:i+15] for i in range(0, len(commands), 15)]
 
         for i, chunk in enumerate(chunks):
@@ -3130,32 +3175,45 @@ async def show_permissions(ctx, role_type: str = None):
                 value="```\n" + "\n".join([f"!{cmd}" for cmd in chunk]) + "```",
                 inline=False
             )
-    else:
-        # Afficher les permissions de tous les rôles
-        for role_key, role_data in role_permissions.items():
-            # Obtenir le rôle Discord correspondant
-            role_id = MOD_ROLE_ID if role_key == "mod" else HELPER_ROLE_ID
-            role = discord.utils.get(ctx.guild.roles, id=role_id)
-            role_mention = role.mention if role else f"Rôle {role_key} (non configuré)"
 
-            # Créer une liste formatée de toutes les commandes sans résumé
-            commands_list = ", ".join([f"`!{cmd}`" for cmd in role_data["commands"]])
+        await ctx.send(embed=embed)
+        return
 
+    # Vérifier si c'est un rôle personnalisé
+    if role_name in CUSTOM_ROLES:
+        # Obtenir le rôle Discord correspondant
+        role_id = CUSTOM_ROLES[role_name]["id"]
+        role = discord.utils.get(ctx.guild.roles, id=role_id)
+        role_mention = role.mention if role else f"Rôle {role_name} (ID: {role_id})"
+
+        embed.description = f"Permissions pour le rôle personnalisé {role_mention}"
+
+        # Diviser les commandes en groupes de 15 pour éviter de dépasser la limite de caractères
+        commands = CUSTOM_ROLES[role_name]["permissions"]
+
+        if not commands:
             embed.add_field(
-                name=f"📋 {role_key.capitalize()} ({role_mention})",
-                value=f"{role_data['description']}\n**Commandes**: {commands_list}",
+                name="Commandes",
+                value="```\nAucune commande configurée pour ce rôle```",
                 inline=False
             )
+        else:
+            chunks = [commands[i:i+15] for i in range(0, len(commands), 15)]
 
-        embed.set_footer(text="Utilisez !permissions mod ou !permissions helper pour voir toutes les commandes d'un rôle spécifique")
+            for i, chunk in enumerate(chunks):
+                embed.add_field(
+                    name=f"Commandes {i+1}" if i > 0 else "Commandes",
+                    value="```\n" + "\n".join([f"!{cmd}" for cmd in chunk]) + "```",
+                    inline=False
+                )
 
-    try:
-        # Envoyer l'embed et stocker le message pour éviter les doublons
-        sent_message = await ctx.send(embed=embed)
-        print(f"Embed des permissions envoyé avec succès (Message ID: {sent_message.id})")
-    except Exception as e:
-        print(f"Erreur lors de l'envoi de l'embed des permissions: {e}")
-        await ctx.send("Une erreur s'est produite lors de l'affichage des permissions. Veuillez réessayer.")
+        await ctx.send(embed=embed)
+        return
+
+    # Si on arrive ici, le rôle n'existe pas
+    await ctx.send(f"❌ Le rôle `{role_name}` n'existe pas dans la configuration.\n"
+                  f"Rôles standards disponibles: `mod`, `helper`\n"
+                  f"Rôles personnalisés disponibles: {', '.join([f'`{r}`' for r in CUSTOM_ROLES.keys()]) if CUSTOM_ROLES else 'Aucun'}")
 
 @bot.command(name="staffperms", aliases=["staffperm"])
 async def staff_permissions(ctx, role_type: str = None):
@@ -3376,93 +3434,29 @@ async def staff_permissions(ctx, role_type: str = None):
         print(f"Erreur lors de l'envoi de l'embed des staffperms: {e}")
         await ctx.send("Une erreur s'est produite lors de l'affichage des permissions du staff. Veuillez réessayer.")
 
-@bot.command(name="addperm")
-async def add_permission(ctx, role_type: str = None, command: str = None):
-    """Ajoute une permission à un rôle (mod/helper)."""
-    if not ctx.author.guild_permissions.administrator:
-        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
-        return
-
-    if not role_type or not command:
-        await ctx.send("❌ Usage: `!addperm <mod/helper> <commande>`")
-        return
-
-    if role_type.lower() not in ["mod", "helper"]:
-        await ctx.send("❌ Type de rôle invalide. Utilisez `mod` ou `helper`.")
-        return
-
-    # Supprimer le préfixe ! si présent
-    if command.startswith("!"):
-        command = command[1:]
-
-    role_key = role_type.lower()
-
-    # Vérifier si la commande existe déjà dans les permissions du rôle
-    if command in role_permissions[role_key]["commands"]:
-        await ctx.send(f"⚠️ La commande `{command}` est déjà dans les permissions du rôle {role_key}.")
-        return
-
-    # Ajouter la commande aux permissions du rôle
-    role_permissions[role_key]["commands"].append(command)
-    save_permissions()
-
-    await ctx.send(f"✅ La commande `{command}` a été ajoutée aux permissions du rôle {role_key}.")
-
-@bot.command(name="removeperm")
-async def remove_permission(ctx, role_type: str = None, command: str = None):
-    """Retire une permission à un rôle (mod/helper)."""
-    if not ctx.author.guild_permissions.administrator:
-        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
-        return
-
-    if not role_type or not command:
-        await ctx.send("❌ Usage: `!removeperm <mod/helper> <commande>`")
-        return
-
-    if role_type.lower() not in ["mod", "helper"]:
-        await ctx.send("❌ Type de rôle invalide. Utilisez `mod` ou `helper`.")
-        return
-
-    # Supprimer le préfixe ! si présent
-    if command.startswith("!"):
-        command = command[1:]
-
-    role_key = role_type.lower()
-
-    # Vérifier si la commande existe dans les permissions du rôle
-    if command not in role_permissions[role_key]["commands"]:
-        await ctx.send(f"⚠️ La commande `{command}` n'est pas dans les permissions du rôle {role_key}.")
-        return
-
-    # Retirer la commande des permissions du rôle
-    role_permissions[role_key]["commands"].remove(command)
-    save_permissions()
-
-    await ctx.send(f"✅ La commande `{command}` a été retirée des permissions du rôle {role_key}.")
-
-@bot.command(name="addanyperm")
-async def add_any_permission(ctx, role_name: str = None, command: str = None):
+@bot.command(name="addperm", aliases=["addanyperm"])
+async def add_permission(ctx, role_name: str = None, command: str = None):
     """
-    Ajoute une permission à n'importe quel rôle (standard ou personnalisé).
+    Ajoute une permission à un rôle (standard ou personnalisé).
 
     Usage:
-    !addanyperm <nom_du_role> <commande>
+    !addperm <nom_du_role> <commande>
 
     Exemples:
-    !addanyperm mod kick
-    !addanyperm helper warn
-    !addanyperm support mute
+    !addperm mod kick
+    !addperm helper warn
+    !addperm support mute
     """
     if not ctx.author.guild_permissions.administrator:
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
 
     if not role_name or not command:
-        await ctx.send("❌ Usage: `!addanyperm <nom_du_role> <commande>`\n"
+        await ctx.send("❌ Usage: `!addperm <nom_du_role> <commande>`\n"
                       "Exemples:\n"
-                      "`!addanyperm mod kick` - Ajoute la commande kick au rôle modérateur\n"
-                      "`!addanyperm helper warn` - Ajoute la commande warn au rôle helper\n"
-                      "`!addanyperm support mute` - Ajoute la commande mute au rôle personnalisé support")
+                      "`!addperm mod kick` - Ajoute la commande kick au rôle modérateur\n"
+                      "`!addperm helper warn` - Ajoute la commande warn au rôle helper\n"
+                      "`!addperm support mute` - Ajoute la commande mute au rôle personnalisé support")
         return
 
     # Supprimer le préfixe ! si présent
@@ -3502,29 +3496,29 @@ async def add_any_permission(ctx, role_name: str = None, command: str = None):
                   f"Rôles standards disponibles: `mod`, `helper`\n"
                   f"Rôles personnalisés disponibles: {', '.join([f'`{r}`' for r in CUSTOM_ROLES.keys()]) if CUSTOM_ROLES else 'Aucun'}")
 
-@bot.command(name="removeanyperm")
-async def remove_any_permission(ctx, role_name: str = None, command: str = None):
+@bot.command(name="removeperm", aliases=["removeanyperm"])
+async def remove_permission(ctx, role_name: str = None, command: str = None):
     """
-    Retire une permission à n'importe quel rôle (standard ou personnalisé).
+    Retire une permission à un rôle (standard ou personnalisé).
 
     Usage:
-    !removeanyperm <nom_du_role> <commande>
+    !removeperm <nom_du_role> <commande>
 
     Exemples:
-    !removeanyperm mod kick
-    !removeanyperm helper warn
-    !removeanyperm support mute
+    !removeperm mod kick
+    !removeperm helper warn
+    !removeperm support mute
     """
     if not ctx.author.guild_permissions.administrator:
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
 
     if not role_name or not command:
-        await ctx.send("❌ Usage: `!removeanyperm <nom_du_role> <commande>`\n"
+        await ctx.send("❌ Usage: `!removeperm <nom_du_role> <commande>`\n"
                       "Exemples:\n"
-                      "`!removeanyperm mod kick` - Retire la commande kick du rôle modérateur\n"
-                      "`!removeanyperm helper warn` - Retire la commande warn du rôle helper\n"
-                      "`!removeanyperm support mute` - Retire la commande mute du rôle personnalisé support")
+                      "`!removeperm mod kick` - Retire la commande kick du rôle modérateur\n"
+                      "`!removeperm helper warn` - Retire la commande warn du rôle helper\n"
+                      "`!removeperm support mute` - Retire la commande mute du rôle personnalisé support")
         return
 
     # Supprimer le préfixe ! si présent
@@ -3557,126 +3551,6 @@ async def remove_any_permission(ctx, role_name: str = None, command: str = None)
         CUSTOM_ROLES[role_name]["permissions"].remove(command)
         save_config()
         await ctx.send(f"✅ La commande `{command}` a été retirée des permissions du rôle personnalisé {role_name}.")
-        return
-
-    # Si on arrive ici, le rôle n'existe pas
-    await ctx.send(f"❌ Le rôle `{role_name}` n'existe pas dans la configuration.\n"
-                  f"Rôles standards disponibles: `mod`, `helper`\n"
-                  f"Rôles personnalisés disponibles: {', '.join([f'`{r}`' for r in CUSTOM_ROLES.keys()]) if CUSTOM_ROLES else 'Aucun'}")
-
-@bot.command(name="showanyperms", aliases=["showperms", "listperms"])
-async def show_any_permissions(ctx, role_name: str = None):
-    """
-    Affiche les permissions de n'importe quel rôle (standard ou personnalisé).
-
-    Usage:
-    !showanyperms <nom_du_role>
-
-    Exemples:
-    !showanyperms mod
-    !showanyperms helper
-    !showanyperms support
-    """
-    if not ctx.author.guild_permissions.administrator:
-        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
-        return
-
-    # Si aucun rôle n'est spécifié, afficher la liste des rôles disponibles
-    if not role_name:
-        embed = discord.Embed(
-            title="🔑 Rôles disponibles",
-            description="Voici la liste des rôles dont vous pouvez consulter les permissions :",
-            color=discord.Color.blue(),
-            timestamp=discord.utils.utcnow()
-        )
-
-        # Rôles standards
-        standard_roles = ["mod", "helper"]
-        embed.add_field(
-            name="Rôles standards",
-            value="\n".join([f"- `{role}`" for role in standard_roles]),
-            inline=False
-        )
-
-        # Rôles personnalisés
-        if CUSTOM_ROLES:
-            embed.add_field(
-                name="Rôles personnalisés",
-                value="\n".join([f"- `{role}`" for role in CUSTOM_ROLES.keys()]),
-                inline=False
-            )
-        else:
-            embed.add_field(
-                name="Rôles personnalisés",
-                value="Aucun rôle personnalisé configuré",
-                inline=False
-            )
-
-        embed.set_footer(text="Utilisez !showanyperms <nom_du_role> pour voir les permissions d'un rôle spécifique")
-        await ctx.send(embed=embed)
-        return
-
-    role_name = role_name.lower()
-
-    # Créer l'embed de base
-    embed = discord.Embed(
-        title=f"🔒 Permissions du rôle {role_name}",
-        color=discord.Color.blue(),
-        timestamp=discord.utils.utcnow()
-    )
-
-    # Vérifier si c'est un rôle standard (mod ou helper)
-    if role_name in ["mod", "helper"]:
-        # Obtenir le rôle Discord correspondant
-        role_id = MOD_ROLE_ID if role_name == "mod" else HELPER_ROLE_ID
-        role = discord.utils.get(ctx.guild.roles, id=role_id)
-        role_mention = role.mention if role else f"Rôle {role_name} (non configuré)"
-
-        embed.description = f"Permissions pour {role_mention}\n{role_permissions[role_name]['description']}"
-
-        # Diviser les commandes en groupes de 15 pour éviter de dépasser la limite de caractères
-        commands = role_permissions[role_name]["commands"]
-        chunks = [commands[i:i+15] for i in range(0, len(commands), 15)]
-
-        for i, chunk in enumerate(chunks):
-            embed.add_field(
-                name=f"Commandes {i+1}" if i > 0 else "Commandes",
-                value="```\n" + "\n".join([f"!{cmd}" for cmd in chunk]) + "```",
-                inline=False
-            )
-
-        await ctx.send(embed=embed)
-        return
-
-    # Vérifier si c'est un rôle personnalisé
-    if role_name in CUSTOM_ROLES:
-        # Obtenir le rôle Discord correspondant
-        role_id = CUSTOM_ROLES[role_name]["id"]
-        role = discord.utils.get(ctx.guild.roles, id=role_id)
-        role_mention = role.mention if role else f"Rôle {role_name} (ID: {role_id})"
-
-        embed.description = f"Permissions pour le rôle personnalisé {role_mention}"
-
-        # Diviser les commandes en groupes de 15 pour éviter de dépasser la limite de caractères
-        commands = CUSTOM_ROLES[role_name]["permissions"]
-
-        if not commands:
-            embed.add_field(
-                name="Commandes",
-                value="```\nAucune commande configurée pour ce rôle```",
-                inline=False
-            )
-        else:
-            chunks = [commands[i:i+15] for i in range(0, len(commands), 15)]
-
-            for i, chunk in enumerate(chunks):
-                embed.add_field(
-                    name=f"Commandes {i+1}" if i > 0 else "Commandes",
-                    value="```\n" + "\n".join([f"!{cmd}" for cmd in chunk]) + "```",
-                    inline=False
-                )
-
-        await ctx.send(embed=embed)
         return
 
     # Si on arrive ici, le rôle n'existe pas

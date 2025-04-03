@@ -849,8 +849,8 @@ async def remove_member(ctx, member: discord.Member):
 @bot.command(name="listtickets")
 async def list_tickets(ctx):
     """Liste tous les tickets actifs."""
-    # Vérifier les permissions
-    if not ctx.author.guild_permissions.manage_channels:
+    # Vérifier les permissions avec le nouveau système
+    if not has_permission(ctx.author, "listtickets"):
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
 
@@ -1727,10 +1727,11 @@ async def removeword(ctx, *, word: str):
 @bot.command()
 async def listwords(ctx):
     """Affiche la liste des mots interdits."""
-    if not ctx.author.guild_permissions.administrator:
+    # Vérifier les permissions avec le nouveau système
+    if not has_permission(ctx.author, "listwords"):
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
-        
+
     await ctx.send(f"Liste des mots interdits: {', '.join(MOTS_INTERDITS)}")
 
 # Commande de diagnostic

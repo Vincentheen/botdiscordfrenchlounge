@@ -222,7 +222,25 @@ tickets = {}
 # Voir lignes ~860
 
 # Fonction pour vérifier si un utilisateur a la permission d'utiliser une commande
-def has_permission(member, command_name):
+def has_permission(member, command_name, target_member=None):
+    """
+    Vérifie si un utilisateur a la permission d'utiliser une commande.
+
+    Args:
+        member: Le membre qui exécute la commande
+        command_name: Le nom de la commande à vérifier
+        target_member: Le membre ciblé par la commande (pour les commandes de modération)
+
+    Returns:
+        bool: True si l'utilisateur a la permission, False sinon
+    """
+    # Si la cible est un administrateur, seul un administrateur peut agir sur lui
+    if target_member:
+        admin_role = discord.utils.get(target_member.guild.roles, id=ADMIN_ROLE_ID)
+        if admin_role and admin_role in target_member.roles:
+            # Si la cible est admin, vérifier si l'exécuteur est aussi admin
+            return member.guild_permissions.administrator
+
     # Les administrateurs ont toutes les permissions
     if member.guild_permissions.administrator:
         return True
@@ -1483,15 +1501,9 @@ async def mute(ctx,
               *,
               reason: str = "Aucune raison spécifiée"):
     """Mute un utilisateur et lui attribue le rôle mute."""
-    # Vérifier les permissions avec le nouveau système
-    if not has_permission(ctx.author, "mute"):
-        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
-        return
-
-    # Vérifier si le membre a le rôle administrateur
-    admin_role = discord.utils.get(member.guild.roles, id=ADMIN_ROLE_ID)
-    if admin_role in member.roles:
-        await ctx.send("❌ Tu ne peux pas mute un administrateur.")
+    # Vérifier les permissions avec le nouveau système, en incluant la cible
+    if not has_permission(ctx.author, "mute", member):
+        await ctx.send("❌ Tu n'as pas la permission de mute cet utilisateur.")
         return
 
     mute_role = discord.utils.get(ctx.guild.roles, id=MUTE_ROLE_ID)
@@ -1516,15 +1528,9 @@ async def mute(ctx,
 @bot.command()
 async def unmute(ctx, member: discord.Member):
     """Unmute un utilisateur et lui retire le rôle mute."""
-    # Vérifier les permissions avec le nouveau système
-    if not has_permission(ctx.author, "unmute"):
-        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
-        return
-
-    # Vérifier si le membre a le rôle administrateur
-    admin_role = discord.utils.get(member.guild.roles, id=ADMIN_ROLE_ID)
-    if admin_role in member.roles:
-        await ctx.send("❌ Tu ne peux pas unmute un administrateur.")
+    # Vérifier les permissions avec le nouveau système, en incluant la cible
+    if not has_permission(ctx.author, "unmute", member):
+        await ctx.send("❌ Tu n'as pas la permission d'unmute cet utilisateur.")
         return
 
     mute_role = discord.utils.get(ctx.guild.roles, id=MUTE_ROLE_ID)
@@ -1546,14 +1552,9 @@ async def kick(ctx,
               *,
               reason: str = "Aucune raison spécifiée"):
     """Expulse un utilisateur du serveur."""
-    # Vérifier si le membre a le rôle administrateur
-    admin_role = discord.utils.get(member.guild.roles, id=ADMIN_ROLE_ID)
-    if admin_role in member.roles:
-        await ctx.send("❌ Tu ne peux pas expulser un administrateur.")
-        return
-
-    if not ctx.author.guild_permissions.kick_members:
-        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
+    # Vérifier les permissions avec le nouveau système, en incluant la cible
+    if not has_permission(ctx.author, "kick", member):
+        await ctx.send("❌ Tu n'as pas la permission d'expulser cet utilisateur.")
         return
 
     await member.kick(reason=reason)
@@ -1566,14 +1567,9 @@ async def ban(ctx,
              *,
              reason: str = "Aucune raison spécifiée"):
     """Bannit un utilisateur du serveur."""
-    # Vérifier si le membre a le rôle administrateur
-    admin_role = discord.utils.get(member.guild.roles, id=ADMIN_ROLE_ID)
-    if admin_role in member.roles:
-        await ctx.send("❌ Tu ne peux pas bannir un administrateur.")
-        return
-
-    if not ctx.author.guild_permissions.ban_members:
-        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
+    # Vérifier les permissions avec le nouveau système, en incluant la cible
+    if not has_permission(ctx.author, "ban", member):
+        await ctx.send("❌ Tu n'as pas la permission de bannir cet utilisateur.")
         return
 
     await member.ban(reason=reason)
@@ -1586,7 +1582,8 @@ async def unban(ctx,
                *,
                reason: str = "Aucune raison spécifiée"):
     """Débannit un utilisateur du serveur."""
-    if not ctx.author.guild_permissions.ban_members:
+    # Vérifier les permissions avec le nouveau système
+    if not has_permission(ctx.author, "unban"):
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
 
@@ -1607,14 +1604,9 @@ async def warn(ctx,
               *,
               reason: str = "Aucune raison spécifiée"):
     """Ajoute un avertissement à un utilisateur."""
-    # Vérifier si le membre a le rôle administrateur
-    admin_role = discord.utils.get(member.guild.roles, id=ADMIN_ROLE_ID)
-    if admin_role in member.roles:
-        await ctx.send("❌ Tu ne peux pas avertir un administrateur.")
-        return
-
-    if not ctx.author.guild_permissions.manage_roles:
-        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
+    # Vérifier les permissions avec le nouveau système, en incluant la cible
+    if not has_permission(ctx.author, "warn", member):
+        await ctx.send("❌ Tu n'as pas la permission d'avertir cet utilisateur.")
         return
 
     # Initialiser les avertissements si nécessaire
@@ -1644,8 +1636,9 @@ async def warn(ctx,
 @bot.command()
 async def addrole(ctx, member: discord.Member, role: discord.Role):
     """Ajoute un rôle à un utilisateur."""
-    if not ctx.author.guild_permissions.manage_roles:
-        await ctx.send("❌ Vous n'avez pas la permission de gérer les rôles.")
+    # Vérifier les permissions avec le nouveau système, en incluant la cible
+    if not has_permission(ctx.author, "addrole", member):
+        await ctx.send("❌ Tu n'as pas la permission d'ajouter un rôle à cet utilisateur.")
         return
 
     if role in member.roles:
@@ -1672,8 +1665,9 @@ async def addrole(ctx, member: discord.Member, role: discord.Role):
 @bot.command()
 async def removerole(ctx, member: discord.Member, role: discord.Role):
     """Retire un rôle à un utilisateur."""
-    if not ctx.author.guild_permissions.manage_roles:
-        await ctx.send("❌ Vous n'avez pas la permission de gérer les rôles.")
+    # Vérifier les permissions avec le nouveau système, en incluant la cible
+    if not has_permission(ctx.author, "removerole", member):
+        await ctx.send("❌ Tu n'as pas la permission de retirer un rôle à cet utilisateur.")
         return
 
     if not role in member.roles:

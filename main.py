@@ -1375,7 +1375,8 @@ async def commands(ctx):
         "`!setadminrole @role` - Définit le rôle administrateur",
         "`!setmodrole @role` - Définit le rôle modérateur",
         "`!sethelperrole @role` - Définit le rôle helper",
-        "`!setrole <nom_du_role> @role commande1 commande2 ...` - Définit un rôle personnalisé",
+        "`!createrole <nom_du_role> <couleur_hex> commande1 ...` - Crée un nouveau rôle Discord",
+        "`!setrole <nom_du_role> @role commande1 commande2 ...` - Configure un rôle existant",
         "`!listroles` - Affiche tous les rôles configurés",
         "`!delrole <nom_du_role>` - Supprime un rôle personnalisé",
         "`!addrolecommand <nom_du_role> commande1 commande2 ...` - Ajoute des commandes à un rôle",
@@ -2803,6 +2804,79 @@ async def set_helper_role(ctx, role: discord.Role = None):
     save_config()
 
     await ctx.send(f"✅ Le rôle de helper a été défini sur {role.mention} (ID: {role.id}).")
+
+@bot.command(name="createrole")
+async def create_custom_role(ctx, role_name: str = None, color: str = None, *commands):
+    """
+    Crée un nouveau rôle Discord et lui attribue des permissions spécifiques.
+
+    Usage:
+    !createrole <nom_du_role> <couleur_hex> commande1 commande2 commande3 ...
+
+    Exemple:
+    !createrole Support #FF0000 kick mute warn clear
+    """
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
+        return
+
+    if role_name is None:
+        await ctx.send("❌ Usage: `!createrole <nom_du_role> <couleur_hex> commande1 commande2 ...`\n"
+                      "Exemple: `!createrole Support #FF0000 kick mute warn clear`")
+        return
+
+    # Vérifier si un rôle avec ce nom existe déjà
+    existing_role = discord.utils.get(ctx.guild.roles, name=role_name)
+    if existing_role:
+        await ctx.send(f"⚠️ Un rôle nommé **{role_name}** existe déjà. Veuillez choisir un autre nom ou utiliser `!setrole` pour configurer ce rôle existant.")
+        return
+
+    # Convertir la couleur hexadécimale en couleur Discord
+    role_color = discord.Color.default()
+    if color:
+        try:
+            # Supprimer le # si présent
+            if color.startswith('#'):
+                color = color[1:]
+            # Convertir la couleur hex en int
+            color_int = int(color, 16)
+            role_color = discord.Color(color_int)
+        except ValueError:
+            await ctx.send(f"⚠️ Couleur invalide. Utilisation de la couleur par défaut.")
+
+    # Créer le nouveau rôle
+    try:
+        new_role = await ctx.guild.create_role(
+            name=role_name,
+            color=role_color,
+            reason=f"Rôle créé par {ctx.author.name} via la commande !createrole"
+        )
+
+        # Convertir les commandes en liste
+        commands_list = list(commands)
+        if not commands_list:
+            await ctx.send("⚠️ Aucune commande spécifiée. Ce rôle n'aura aucune permission.")
+
+        # Ajouter le rôle personnalisé
+        global CUSTOM_ROLES
+        CUSTOM_ROLES[role_name] = {
+            "id": new_role.id,
+            "permissions": commands_list
+        }
+
+        # Sauvegarder la configuration
+        save_config()
+
+        # Créer un message de confirmation avec la liste des commandes
+        commands_str = ", ".join([f"`!{cmd}`" for cmd in commands_list]) if commands_list else "Aucune"
+
+        await ctx.send(f"✅ Le rôle **{role_name}** a été créé avec succès {new_role.mention} (ID: {new_role.id}).\n"
+                      f"**Commandes autorisées**: {commands_str}")
+
+    except discord.Forbidden:
+        await ctx.send("❌ Je n'ai pas la permission de créer des rôles sur ce serveur.")
+    except Exception as e:
+        await ctx.send(f"❌ Une erreur s'est produite lors de la création du rôle: {str(e)}")
 
 @bot.command(name="setrole")
 async def set_custom_role(ctx, role_name: str = None, role: discord.Role = None, *commands):

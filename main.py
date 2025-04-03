@@ -2982,76 +2982,104 @@ async def list_custom_roles(ctx):
     await ctx.send(embed=embed)
 
 @bot.command(name="delrole")
-async def delete_custom_role(ctx, role_name: str = None):
+async def delete_custom_role(ctx, *, role_input: str = None):
     """
-    Supprime un rôle personnalisé de la configuration et du serveur.
+    Supprime un rôle du serveur Discord.
 
     Cette commande supprime définitivement le rôle du serveur Discord.
     Elle ne peut pas être utilisée sur les rôles owner ou admin.
 
     Usage:
-    !delrole <nom_du_role>
+    !delrole <nom_du_role ou @mention>
     """
     if not ctx.author.guild_permissions.administrator:
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
 
-    if role_name is None:
-        await ctx.send("❌ Usage: `!delrole <nom_du_role>`")
+    if role_input is None:
+        await ctx.send("❌ Usage: `!delrole <nom_du_role ou @mention>`")
         return
 
-    # Convertir le nom du rôle en minuscules pour la recherche
-    role_name = role_name.lower()
+    # Essayer de trouver le rôle par mention ou par nom
+    role = None
 
-    # Vérifier si le rôle est un rôle protégé (owner ou admin)
-    if role_name in ["owner", "admin"]:
-        await ctx.send("⛔ Impossible de supprimer un rôle protégé (owner ou admin).")
-        return
-
-    # Vérifier si le rôle est un rôle standard (mod ou helper)
-    if role_name in ["mod", "helper"]:
-        await ctx.send("⚠️ Les rôles standards (mod ou helper) ne peuvent pas être supprimés avec cette commande. Utilisez `!setmodrole` ou `!sethelperrole` pour les reconfigurer.")
-        return
-
-    global CUSTOM_ROLES
-    if role_name in CUSTOM_ROLES:
-        # Récupérer l'ID du rôle Discord
-        role_id = CUSTOM_ROLES[role_name]["id"]
-
-        # Tenter de supprimer le rôle du serveur
-        try:
-            # Récupérer l'objet rôle
-            role = discord.utils.get(ctx.guild.roles, id=role_id)
-
-            if role:
-                # Vérifier si le rôle est utilisé comme rôle owner ou admin
-                if role_id == OWNER_ROLE_ID:
-                    await ctx.send("⛔ Ce rôle est configuré comme rôle propriétaire (owner) et ne peut pas être supprimé.")
-                    return
-
-                if role_id == ADMIN_ROLE_ID:
-                    await ctx.send("⛔ Ce rôle est configuré comme rôle administrateur (admin) et ne peut pas être supprimé.")
-                    return
-
-                # Supprimer le rôle du serveur
-                await role.delete(reason=f"Supprimé par {ctx.author.name} via la commande !delrole")
-                await ctx.send(f"✅ Le rôle Discord **{role.name}** a été supprimé du serveur.")
-            else:
-                await ctx.send(f"⚠️ Le rôle Discord associé n'a pas été trouvé sur le serveur (peut-être déjà supprimé).")
-
-        except discord.Forbidden:
-            await ctx.send("❌ Je n'ai pas la permission de supprimer ce rôle.")
-            return
-        except discord.HTTPException as e:
-            await ctx.send(f"❌ Une erreur s'est produite lors de la suppression du rôle: {str(e)}")
-            return
-
-        # Supprimer le rôle de la configuration
-        del CUSTOM_ROLES[role_name]
-        save_config()
-        await ctx.send(f"✅ Le rôle personnalisé **{role_name}** a été supprimé de la configuration.")
+    # Vérifier si c'est une mention de rôle
+    if ctx.message.role_mentions:
+        role = ctx.message.role_mentions[0]
     else:
-        await ctx.send(f"❌ Le rôle personnalisé **{role_name}** n'existe pas dans la configuration.")
+        # Chercher le rôle par nom
+        role = discord.utils.get(ctx.guild.roles, name=role_input)
+
+        # Si le rôle n'est pas trouvé, essayer de chercher de manière insensible à la casse
+        if not role:
+            for guild_role in ctx.guild.roles:
+                if guild_role.name.lower() == role_input.lower():
+                    role = guild_role
+                    break
+
+    # Si le rôle n'est toujours pas trouvé, vérifier dans la configuration
+    role_name_lower = role_input.lower()
+    if not role and role_name_lower in CUSTOM_ROLES:
+        role_id = CUSTOM_ROLES[role_name_lower]["id"]
+        role = discord.utils.get(ctx.guild.roles, id=role_id)
+
+    # Si le rôle n'est pas trouvé du tout
+    if not role:
+        await ctx.send(f"❌ Le rôle **{role_input}** n'a pas été trouvé sur le serveur.")
+        return
+
+    # Vérifier si c'est un rôle protégé
+    if role.id == OWNER_ROLE_ID:
+        await ctx.send("⛔ Ce rôle est configuré comme rôle propriétaire (owner) et ne peut pas être supprimé.")
+        return
+
+    if role.id == ADMIN_ROLE_ID:
+        await ctx.send("⛔ Ce rôle est configuré comme rôle administrateur (admin) et ne peut pas être supprimé.")
+        return
+
+    if role.id == MOD_ROLE_ID:
+        await ctx.send("⚠️ Ce rôle est configuré comme rôle modérateur (mod) et ne peut pas être supprimé avec cette commande. Utilisez `!setmodrole` pour le reconfigurer.")
+        return
+
+    if role.id == HELPER_ROLE_ID:
+        await ctx.send("⚠️ Ce rôle est configuré comme rôle helper et ne peut pas être supprimé avec cette commande. Utilisez `!sethelperrole` pour le reconfigurer.")
+        return
+
+    # Vérifier si c'est un rôle par défaut (@everyone)
+    if role.is_default():
+        await ctx.send("⛔ Le rôle @everyone ne peut pas être supprimé.")
+        return
+
+    # Vérifier si c'est un rôle intégré (bot)
+    if role.is_integration() or role.is_bot_managed():
+        await ctx.send("⛔ Ce rôle est géré par une intégration ou un bot et ne peut pas être supprimé manuellement.")
+        return
+
+    # Vérifier si le rôle est plus haut que celui du bot
+    if role.position >= ctx.guild.me.top_role.position:
+        await ctx.send("❌ Je ne peux pas supprimer ce rôle car il est plus haut que mon rôle le plus élevé dans la hiérarchie.")
+        return
+
+    # Stocker le nom du rôle pour les messages
+    role_name = role.name
+
+    # Tenter de supprimer le rôle du serveur
+    try:
+        await role.delete(reason=f"Supprimé par {ctx.author.name} via la commande !delrole")
+        await ctx.send(f"✅ Le rôle Discord **{role_name}** a été supprimé du serveur.")
+
+        # Supprimer également de la configuration si présent
+        for custom_role_name, data in list(CUSTOM_ROLES.items()):
+            if data["id"] == role.id:
+                del CUSTOM_ROLES[custom_role_name]
+                save_config()
+                await ctx.send(f"✅ Le rôle personnalisé **{custom_role_name}** a également été supprimé de la configuration.")
+                break
+
+    except discord.Forbidden:
+        await ctx.send("❌ Je n'ai pas la permission de supprimer ce rôle.")
+    except discord.HTTPException as e:
+        await ctx.send(f"❌ Une erreur s'est produite lors de la suppression du rôle: {str(e)}")
 
 @bot.command(name="addrolecommand")
 async def add_role_command(ctx, role_name: str = None, *commands):

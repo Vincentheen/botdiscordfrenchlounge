@@ -1376,19 +1376,19 @@ async def commands(ctx):
         "`!setmodrole @role` - Définit le rôle modérateur",
         "`!sethelperrole @role` - Définit le rôle helper",
         "`!createrole <nom> <couleur> commandes...` - Crée un nouveau rôle Discord",
-        "`!setrole <nom> @role commandes...` - Configure un rôle existant",
+        "`!setrole <nom> <@role ou nom> commandes...` - Configure un rôle existant",
         "`!listroles` - Affiche tous les rôles configurés",
-        "`!delrole <nom>` - Supprime un rôle personnalisé"
+        "`!delrole <nom ou @mention>` - Supprime un rôle Discord du serveur"
     ]
 
     staff_commands_2 = [
-        "`!addrolecommand <nom> commandes...` - Ajoute des commandes à un rôle personnalisé",
-        "`!removerolecommand <nom> commandes...` - Retire des commandes d'un rôle personnalisé",
+        "`!addrolecommand <nom ou @mention> commandes...` - Ajoute des commandes à un rôle",
+        "`!removerolecommand <nom ou @mention> commandes...` - Retire des commandes d'un rôle",
         "`!staffperms [owner/admin/mod/helper]` - Affiche les permissions détaillées du staff",
-        "`!permissions [nom_du_role]` - Affiche les permissions d'un rôle (standard ou personnalisé)",
-        "`!perms [nom_du_role]` - Alias de permissions",
-        "`!addperm <nom_du_role> <commande>` - Ajoute une permission à un rôle",
-        "`!removeperm <nom_du_role> <commande>` - Retire une permission d'un rôle",
+        "`!permissions [nom ou @mention]` - Affiche les permissions d'un rôle",
+        "`!perms [nom ou @mention]` - Alias de permissions",
+        "`!addperm <nom ou @mention> <commande>` - Ajoute une permission à un rôle",
+        "`!removeperm <nom ou @mention> <commande>` - Retire une permission d'un rôle",
         "`!resetperms [mod/helper/all]` - Réinitialise les permissions"
     ]
 
@@ -3372,24 +3372,25 @@ async def remove_role_command(ctx, role_input: str = None, *commands):
 
 # Commandes pour gérer les permissions des rôles
 @bot.command(name="permissions", aliases=["perms", "showanyperms", "showperms", "listperms"])
-async def show_permissions(ctx, role_name: str = None):
+async def show_permissions(ctx, role_input: str = None):
     """
     Affiche les permissions d'un rôle (standard ou personnalisé).
 
     Usage:
-    !permissions [nom_du_role]
+    !permissions [nom_du_role ou @mention]
 
     Exemples:
     !permissions mod
     !permissions helper
     !permissions support
+    !permissions @Support
     """
     if not ctx.author.guild_permissions.administrator:
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
         return
 
     # Si aucun rôle n'est spécifié, afficher la liste des rôles disponibles
-    if not role_name:
+    if not role_input:
         embed = discord.Embed(
             title="🔑 Rôles disponibles",
             description="Voici la liste des rôles dont vous pouvez consulter les permissions :",
@@ -3419,27 +3420,103 @@ async def show_permissions(ctx, role_name: str = None):
                 inline=False
             )
 
+        embed.add_field(
+            name="💡 Astuce",
+            value="Vous pouvez également mentionner directement un rôle pour voir ses permissions, par exemple: `!permissions @Support`",
+            inline=False
+        )
+
         embed.set_footer(text="Utilisez !permissions <nom_du_role> pour voir les permissions d'un rôle spécifique")
         await ctx.send(embed=embed)
         return
 
-    role_name = role_name.lower()
+    # Trouver le rôle Discord et le nom dans la configuration
+    role = None
+    role_name = None
+    is_standard_role = False
+
+    # Vérifier d'abord si c'est une mention de rôle
+    if ctx.message.role_mentions:
+        role = ctx.message.role_mentions[0]
+
+        # Vérifier si c'est un rôle standard par ID
+        if role.id == MOD_ROLE_ID:
+            role_name = "mod"
+            is_standard_role = True
+        elif role.id == HELPER_ROLE_ID:
+            role_name = "helper"
+            is_standard_role = True
+        else:
+            # Chercher le nom du rôle dans la configuration
+            for custom_name, data in CUSTOM_ROLES.items():
+                if data["id"] == role.id:
+                    role_name = custom_name
+                    break
+
+            # Si le rôle n'est pas dans la configuration
+            if not role_name:
+                await ctx.send(f"❌ Le rôle **{role.name}** n'est pas configuré avec des permissions spécifiques.")
+                return
+    else:
+        # Vérifier si c'est un rôle standard (mod ou helper)
+        role_input_lower = role_input.lower()
+        if role_input_lower in ["mod", "helper"]:
+            role_name = role_input_lower
+            is_standard_role = True
+            role_id = MOD_ROLE_ID if role_name == "mod" else HELPER_ROLE_ID
+            role = discord.utils.get(ctx.guild.roles, id=role_id)
+        else:
+            # Chercher d'abord dans la configuration des rôles personnalisés
+            if role_input_lower in CUSTOM_ROLES:
+                role_name = role_input_lower
+                role_id = CUSTOM_ROLES[role_name]["id"]
+                role = discord.utils.get(ctx.guild.roles, id=role_id)
+            else:
+                # Chercher le rôle par nom
+                role = discord.utils.get(ctx.guild.roles, name=role_input)
+
+                # Si le rôle n'est pas trouvé, essayer de chercher de manière insensible à la casse
+                if not role:
+                    for guild_role in ctx.guild.roles:
+                        if guild_role.name.lower() == role_input.lower():
+                            role = guild_role
+                            break
+
+                if role:
+                    # Vérifier si c'est un rôle standard par ID
+                    if role.id == MOD_ROLE_ID:
+                        role_name = "mod"
+                        is_standard_role = True
+                    elif role.id == HELPER_ROLE_ID:
+                        role_name = "helper"
+                        is_standard_role = True
+                    else:
+                        # Chercher si ce rôle est déjà dans la configuration
+                        for custom_name, data in CUSTOM_ROLES.items():
+                            if data["id"] == role.id:
+                                role_name = custom_name
+                                break
+
+                        # Si le rôle n'est pas dans la configuration
+                        if not role_name:
+                            await ctx.send(f"❌ Le rôle **{role.name}** n'est pas configuré avec des permissions spécifiques.")
+                            return
+
+    # Si le rôle n'est pas trouvé
+    if not role:
+        await ctx.send(f"❌ Le rôle **{role_input}** n'a pas été trouvé sur le serveur.")
+        return
 
     # Créer l'embed de base
     embed = discord.Embed(
-        title=f"🔒 Permissions du rôle {role_name}",
-        color=discord.Color.blue(),
+        title=f"🔒 Permissions du rôle {role.name}",
+        color=role.color,
         timestamp=discord.utils.utcnow()
     )
 
-    # Vérifier si c'est un rôle standard (mod ou helper)
-    if role_name in ["mod", "helper"]:
-        # Obtenir le rôle Discord correspondant
-        role_id = MOD_ROLE_ID if role_name == "mod" else HELPER_ROLE_ID
-        role = discord.utils.get(ctx.guild.roles, id=role_id)
-        role_mention = role.mention if role else f"Rôle {role_name} (non configuré)"
-
-        embed.description = f"Permissions pour {role_mention}\n{role_permissions[role_name]['description']}"
+    # Si c'est un rôle standard (mod ou helper)
+    if is_standard_role:
+        embed.description = f"Permissions pour {role.mention}\n{role_permissions[role_name]['description']}"
 
         # Diviser les commandes en groupes de 15 pour éviter de dépasser la limite de caractères
         commands = role_permissions[role_name]["commands"]
@@ -3455,14 +3532,9 @@ async def show_permissions(ctx, role_name: str = None):
         await ctx.send(embed=embed)
         return
 
-    # Vérifier si c'est un rôle personnalisé
+    # Si c'est un rôle personnalisé
     if role_name in CUSTOM_ROLES:
-        # Obtenir le rôle Discord correspondant
-        role_id = CUSTOM_ROLES[role_name]["id"]
-        role = discord.utils.get(ctx.guild.roles, id=role_id)
-        role_mention = role.mention if role else f"Rôle {role_name} (ID: {role_id})"
-
-        embed.description = f"Permissions pour le rôle personnalisé {role_mention}"
+        embed.description = f"Permissions pour le rôle personnalisé {role.mention}"
 
         # Diviser les commandes en groupes de 15 pour éviter de dépasser la limite de caractères
         commands = CUSTOM_ROLES[role_name]["permissions"]
@@ -3486,8 +3558,8 @@ async def show_permissions(ctx, role_name: str = None):
         await ctx.send(embed=embed)
         return
 
-    # Si on arrive ici, le rôle n'existe pas
-    await ctx.send(f"❌ Le rôle `{role_name}` n'existe pas dans la configuration.\n"
+    # Si on arrive ici, le rôle n'est pas configuré
+    await ctx.send(f"❌ Le rôle **{role.name}** n'est pas configuré avec des permissions spécifiques.\n"
                   f"Rôles standards disponibles: `mod`, `helper`\n"
                   f"Rôles personnalisés disponibles: {', '.join([f'`{r}`' for r in CUSTOM_ROLES.keys()]) if CUSTOM_ROLES else 'Aucun'}")
 

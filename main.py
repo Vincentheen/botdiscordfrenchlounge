@@ -1369,28 +1369,32 @@ async def commands(ctx):
     ]
     embed.add_field(name="🎉 Général", value="\n".join(general_commands), inline=False)
 
-    # Commandes de gestion des rôles de staff
-    staff_commands = [
+    # Commandes de gestion des rôles de staff - divisées en plusieurs parties pour éviter de dépasser la limite de 1024 caractères
+    staff_commands_1 = [
         "`!setownerrole @role` - Définit le rôle propriétaire du serveur",
         "`!setadminrole @role` - Définit le rôle administrateur",
         "`!setmodrole @role` - Définit le rôle modérateur",
         "`!sethelperrole @role` - Définit le rôle helper",
-        "`!createrole <nom_du_role> <couleur_hex> commande1 ...` - Crée un nouveau rôle Discord",
-        "`!setrole <nom_du_role> @role commande1 commande2 ...` - Configure un rôle existant",
+        "`!createrole <nom> <couleur> commandes...` - Crée un nouveau rôle Discord",
+        "`!setrole <nom> @role commandes...` - Configure un rôle existant",
         "`!listroles` - Affiche tous les rôles configurés",
-        "`!delrole <nom_du_role>` - Supprime un rôle personnalisé",
-        "`!addrolecommand <nom_du_role> commande1 commande2 ...` - Ajoute des commandes à un rôle",
-        "`!removerolecommand <nom_du_role> commande1 commande2 ...` - Retire des commandes d'un rôle",
-        "`!staffperms [owner/admin/mod/helper]` - Affiche les permissions détaillées des rôles de staff",
-        "`!permissions [mod/helper]` - Affiche les permissions des rôles modérateur et helper",
+        "`!delrole <nom>` - Supprime un rôle personnalisé"
+    ]
+
+    staff_commands_2 = [
+        "`!addrolecommand <nom> commandes...` - Ajoute des commandes à un rôle",
+        "`!removerolecommand <nom> commandes...` - Retire des commandes d'un rôle",
+        "`!staffperms [owner/admin/mod/helper]` - Affiche les permissions détaillées",
+        "`!permissions [mod/helper]` - Affiche les permissions des rôles",
         "`!addperm <mod/helper> <commande>` - Ajoute une permission à un rôle standard",
-        "`!removeperm <mod/helper> <commande>` - Retire une permission à un rôle standard",
+        "`!removeperm <mod/helper> <commande>` - Retire une permission",
         "`!resetperms [mod/helper/all]` - Réinitialise les permissions"
     ]
 
     # N'afficher les commandes de gestion des rôles de staff qu'aux propriétaires et administrateurs
     if owner_role or admin_role:
-        embed.add_field(name="👑 Gestion des rôles de staff", value="\n".join(staff_commands), inline=False)
+        embed.add_field(name="👑 Gestion des rôles (1/2)", value="\n".join(staff_commands_1), inline=False)
+        embed.add_field(name="👑 Gestion des rôles (2/2)", value="\n".join(staff_commands_2), inline=False)
 
     # Commandes de modération
     mod_commands = [

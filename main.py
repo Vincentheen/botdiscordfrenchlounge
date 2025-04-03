@@ -1496,9 +1496,8 @@ async def giveaway(ctx, time_or_members: str, *, prize: str):
     !giveaway m:100 Un rôle VIP  # Se termine quand le serveur atteint 100 membres
     """
     # Vérifier les permissions
-    guild_id = ctx.guild.id
-    admin_role_id = get_config(guild_id, 'ADMIN_ROLE_ID')
-    role = discord.utils.get(ctx.author.roles, id=admin_role_id)
+    # Utiliser directement la variable globale ADMIN_ROLE_ID au lieu de get_config
+    role = discord.utils.get(ctx.author.roles, id=ADMIN_ROLE_ID)
 
     if role is None and not ctx.author.guild_permissions.administrator:
         await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.")
@@ -1624,10 +1623,9 @@ async def giveaway(ctx, time_or_members: str, *, prize: str):
             f"🎁 Prix remporté : {prize}\n"
             f"📝 Raison : {end_reason}")
 
-        # Obtenir les IDs des rôles depuis la configuration
-        guild_id = ctx.guild.id
-        role_join_id = get_config(guild_id, 'ROLE_JOIN_ID')
-        giveaway_winner_role_id = get_config(guild_id, 'GIVEAWAY_WINNER_ROLE_ID')
+        # Utiliser directement les variables globales au lieu de get_config
+        role_join_id = ROLE_JOIN_ID
+        giveaway_winner_role_id = GIVEAWAY_WINNER_ROLE_ID
 
         # Ajout et retrait de rôles au gagnant
         role_to_remove = discord.utils.get(winner.guild.roles, id=role_join_id) if role_join_id else None

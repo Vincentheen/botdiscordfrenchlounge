@@ -7,6 +7,8 @@ import datetime
 from keep_alive import keep_alive
 import json
 from giveaway_role_view import GiveawayRoleView
+import requests
+import time
 
 # Configuration des intents (une seule fois)
 intents = discord.Intents.default()
@@ -39,6 +41,15 @@ AUTO_ROLE_ID = 1354904148570542273
 WELCOME_CHANNEL_ID = 1357046834874421496
 GUILD_ID = 1354892680722911405 # ID du serveur
 
+
+# ping automatique 
+WEBHOOK_URL = 'https://discord.com/api/webhooks/1357701822189666324/l1kArP7dFhHPUm9vnXod2ZCFPHkwVNBwMBF27l9lh3bhjPjlsvO1KPNgTlZvdbqeV3GaN'
+MESSAGE = '!ping'
+
+while True:
+    requests.post(WEBHOOK_URL, json={"content": MESSAGE})
+    print("Message envoyé : !ping")
+    time.sleep(60) 
 
 # Fichiers de configuration
 CONFIG_FILE = 'config.json'

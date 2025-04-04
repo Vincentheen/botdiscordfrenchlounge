@@ -31,10 +31,10 @@ HELPER_ROLE_ID = 1354899626997579807   # Helper
 CUSTOM_ROLES = {}  # Format: {"nom_du_role": {"id": role_id, "permissions": [liste_des_commandes]}}
 
 ROLE_JOIN_ID = 1357113117561192478
+# Rôle attribué uniquement au gagnant du giveaway
 GIVEAWAY_WINNER_ROLE_ID = 1357113189762076692
-# Vous devez créer un nouveau rôle "Participant Giveaway" sur votre serveur Discord
-# et remplacer cet ID par l'ID du nouveau rôle
-GIVEAWAY_PARTICIPANT_ROLE_ID = 1357113117561192478  # Utilisation temporaire du ROLE_JOIN_ID
+# Rôle attribué à tous les participants du giveaway
+GIVEAWAY_PARTICIPANT_ROLE_ID = 1354904148570542273  # Utilisez l'ID du rôle AUTO_ROLE pour les participants
 AUTO_ROLE_ID = 1354904148570542273
 WELCOME_CHANNEL_ID = 1357046834874421496
 GUILD_ID = 1354892680722911405 # ID du serveur
@@ -1560,6 +1560,14 @@ async def end_giveaway_with_winner(ctx, giveaway_id, custom_reason=None):
     participant_role = discord.utils.get(winner.guild.roles, id=participant_role_id) if participant_role_id else None
     winner_role = discord.utils.get(winner.guild.roles, id=winner_role_id) if winner_role_id else None
 
+    if not participant_role:
+        print(f"⚠️ Rôle de participant introuvable (ID: {participant_role_id})")
+        await ctx.send("⚠️ Le rôle de participant est introuvable. Le gagnant a été choisi mais les rôles n'ont pas été mis à jour.")
+
+    if not winner_role:
+        print(f"⚠️ Rôle de gagnant introuvable (ID: {winner_role_id})")
+        await ctx.send("⚠️ Le rôle de gagnant est introuvable. Le gagnant a été choisi mais les rôles n'ont pas été mis à jour.")
+
     if participant_role and winner_role:
         try:
             # Vérifier si le rôle du bot est plus haut dans la hiérarchie
@@ -1570,13 +1578,13 @@ async def end_giveaway_with_winner(ctx, giveaway_id, custom_reason=None):
                 error_msg = f"Erreur : Le rôle du bot ({bot_top_role.name}) est plus bas que les rôles à modifier."
                 print(error_msg)
                 await ctx.send(f"⚠️ **Erreur de permission** : {error_msg}")
-    # Retirer le rôle de participant à tous les participants
+            else:
+                # Retirer le rôle de participant à tous les participants
                 for participant in current_giveaway["participants"]:
                     try:
                         if participant_role in participant.roles:
                             await participant.remove_roles(participant_role)
-               else:
-                                     print(f"Rôle de participant retiré à {participant.name}")
+                            print(f"Rôle de participant retiré à {participant.name}")
                     except Exception as e:
                         print(f"Erreur lors du retrait du rôle de participant à {participant.name}: {e}")
 
@@ -1669,6 +1677,18 @@ async def giveaway(ctx, time_or_members: str, *, prize: str):
                            f"📌 Clique sur le bouton ci-dessous pour participer au giveaway !")
 
     try:
+        # Vérifier que les rôles existent
+        participant_role = discord.utils.get(ctx.guild.roles, id=GIVEAWAY_PARTICIPANT_ROLE_ID)
+        winner_role = discord.utils.get(ctx.guild.roles, id=GIVEAWAY_WINNER_ROLE_ID)
+
+        if not participant_role:
+            await ctx.send(f"⚠️ Le rôle de participant (ID: {GIVEAWAY_PARTICIPANT_ROLE_ID}) est introuvable. Le giveaway ne peut pas être créé.")
+            return
+
+        if not winner_role:
+            await ctx.send(f"⚠️ Le rôle de gagnant (ID: {GIVEAWAY_WINNER_ROLE_ID}) est introuvable. Le giveaway ne peut pas être créé.")
+            return
+
         # Envoyer d'abord le message pour obtenir son ID
         giveaway_msg = await ctx.send(content=giveaway_content)
 

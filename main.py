@@ -1497,38 +1497,41 @@ async def ticket(ctx):
 # Fonction utilitaire pour terminer un giveaway
 async def end_giveaway_with_winner(ctx, giveaway_id, custom_reason=None):
     """Termine un giveaway et choisit un gagnant."""
+    # Vérifier si le giveaway existe encore
     if giveaway_id not in giveaways:
-        await ctx.send("❌ Aucun giveaway actif avec cet ID.")
+        print(f"Giveaway {giveaway_id} non trouvé dans la liste des giveaways actifs.")
         return False
 
+    # Récupérer les informations du giveaway
     current_giveaway = giveaways[giveaway_id]
     giveaway_msg = current_giveaway["message"]
     prize = current_giveaway["prize"]
 
-    # Récupérer les participants
-    try:
-        # Mettre à jour la liste des participants une dernière fois
-        message = await giveaway_msg.channel.fetch_message(giveaway_msg.id)
-        for reaction in message.reactions:
-            if str(reaction.emoji) == "🎉":
-                async for user in reaction.users():
-                    if not user.bot:
-                        current_giveaway["participants"].add(user)
-    except Exception as e:
-        print(f"Erreur lors de la récupération des participants: {e}")
+    # Supprimer immédiatement le giveaway de la liste pour éviter les appels multiples
+    del giveaways[giveaway_id]
+    print(f"Giveaway {giveaway_id} supprimé de la liste des giveaways actifs.")
+
+    # Les participants sont déjà enregistrés dans le dictionnaire lorsqu'ils cliquent sur le bouton
+    # Nous n'avons plus besoin de vérifier les réactions
+    print(f"Nombre de participants au giveaway: {len(current_giveaway['participants'])}")
+    for participant in current_giveaway["participants"]:
+        print(f"- {participant.name} (ID: {participant.id})")
 
     # Vérifier s'il y a des participants
     if not current_giveaway["participants"]:
-        await ctx.send("❌ Aucun participant au giveaway. Aucun gagnant n'a été choisi.")
-        await giveaway_msg.edit(content=f"🎉 **GIVEAWAY ANNULÉ** 🎉\n"
-                               f"🏆 Prix : {prize}\n"
-                               f"📝 Raison : Aucun participant")
-        # Supprimer le giveaway de la liste
-        del giveaways[giveaway_id]
+        print("Aucun participant au giveaway.")
+        try:
+            await giveaway_msg.edit(content=f"🎉 **GIVEAWAY ANNULÉ** 🎉\n"
+                                   f"🏆 Prix : {prize}\n"
+                                   f"📝 Raison : Aucun participant")
+            await ctx.send("❌ Aucun participant au giveaway. Aucun gagnant n'a été choisi.")
+        except Exception as e:
+            print(f"Erreur lors de la mise à jour du message de giveaway annulé: {e}")
         return False
 
     # Choisir un gagnant
     winner = random.choice(list(current_giveaway["participants"]))
+    print(f"Gagnant choisi: {winner.name} (ID: {winner.id})")
 
     # Déterminer la raison de fin du giveaway
     if custom_reason:
@@ -1537,11 +1540,14 @@ async def end_giveaway_with_winner(ctx, giveaway_id, custom_reason=None):
         end_reason = "Le temps est écoulé" if not current_giveaway["is_member_based"] else f"Le serveur a atteint {ctx.guild.member_count} membres"
 
     # Mettre à jour le message
-    await giveaway_msg.edit(
-        content=f"🎉 **GIVEAWAY TERMINÉ !** 🎉\n"
-        f"🏆 **Le gagnant est {winner.mention} !** 🎊\n"
-        f"🎁 Prix remporté : {prize}\n"
-        f"📝 Raison : {end_reason}")
+    try:
+        await giveaway_msg.edit(
+            content=f"🎉 **GIVEAWAY TERMINÉ !** 🎉\n"
+            f"🏆 **Le gagnant est {winner.mention} !** 🎊\n"
+            f"🎁 Prix remporté : {prize}\n"
+            f"📝 Raison : {end_reason}")
+    except Exception as e:
+        print(f"Erreur lors de la mise à jour du message de giveaway terminé: {e}")
 
     # Utiliser directement les variables globales
     role_join_id = ROLE_JOIN_ID
@@ -1570,10 +1576,11 @@ async def end_giveaway_with_winner(ctx, giveaway_id, custom_reason=None):
             await ctx.send(f"⚠️ Erreur lors de l'attribution des rôles au gagnant: {e}")
 
     # Annoncer le gagnant
-    await ctx.send(f"🎊 **Félicitations à {winner.mention} !** Tu as gagné : **{prize}** !")
+    try:
+        await ctx.send(f"🎊 **Félicitations à {winner.mention} !** Tu as gagné : **{prize}** !")
+    except Exception as e:
+        print(f"Erreur lors de l'annonce du gagnant: {e}")
 
-    # Supprimer le giveaway de la liste
-    del giveaways[giveaway_id]
     return True
 
 @bot.command()
@@ -1586,7 +1593,6 @@ async def giveaway(ctx, time_or_members: str, *, prize: str):
     !giveaway m:100 Un rôle VIP  # Se termine quand le serveur atteint 100 membres
     """
     # Vérifier les permissions
-    # Utiliser directement la variable globale ADMIN_ROLE_ID au lieu de get_config
     role = discord.utils.get(ctx.author.roles, id=ADMIN_ROLE_ID)
 
     if role is None and not ctx.author.guild_permissions.administrator:
@@ -1625,6 +1631,10 @@ async def giveaway(ctx, time_or_members: str, *, prize: str):
         # Giveaway basé sur le temps
         try:
             time_seconds = int(time_or_members)
+            # Imposer un minimum de 10 secondes pour éviter les problèmes avec les giveaways trop courts
+            if time_seconds < 10:
+                await ctx.send("❌ Le temps doit être d'au moins 10 secondes pour éviter les problèmes techniques.")
+                return
             if time_seconds <= 0:
                 await ctx.send("❌ Le temps doit être supérieur à 0 secondes.")
                 return
@@ -1639,83 +1649,114 @@ async def giveaway(ctx, time_or_members: str, *, prize: str):
                            f"🏆 Prix : {prize}\n"
                            f"👥 Se terminera quand le serveur atteindra **{target_members}** membres (actuellement {current_members}).\n"
                            f"🕒 Ou dans {time_seconds} secondes maximum.\n"
-                           f"Réagis avec 🎉 pour participer !\n"
-                           f"📌 Utilise le bouton ci-dessous pour obtenir le rôle giveaway et participer !")
+                           f"📌 Clique sur le bouton ci-dessous pour participer au giveaway !")
     else:
         giveaway_content = (f"🎉 **GIVEAWAY** 🎉\n"
                            f"🏆 Prix : {prize}\n"
                            f"🕒 Temps restant : {time_seconds} secondes.\n"
-                           f"Réagis avec 🎉 pour participer !\n"
-                           f"📌 Utilise le bouton ci-dessous pour obtenir le rôle giveaway et participer !")
+                           f"📌 Clique sur le bouton ci-dessous pour participer au giveaway !")
 
-    # Créer la vue avec le bouton pour obtenir le rôle giveaway
-    giveaway_view = GiveawayRoleView(GIVEAWAY_WINNER_ROLE_ID)
+    try:
+        # Envoyer d'abord le message pour obtenir son ID
+        giveaway_msg = await ctx.send(content=giveaway_content)
 
-    # Envoyer le message avec la vue
-    giveaway_msg = await ctx.send(content=giveaway_content, view=giveaway_view)
+        # Créer la vue avec le bouton pour obtenir le rôle giveaway et participer
+        giveaway_view = GiveawayRoleView(GIVEAWAY_WINNER_ROLE_ID, giveaway_msg.id)
 
-    # Ajouter la réaction 🎉
-    await giveaway_msg.add_reaction("🎉")
+        # Mettre à jour le message avec la vue
+        await giveaway_msg.edit(content=giveaway_content, view=giveaway_view)
 
-    # Stocker les informations du giveaway avec l'ID du message comme clé
-    giveaways[giveaway_msg.id] = {
-        "prize": prize,
-        "time": time_seconds,
-        "message": giveaway_msg,
-        "participants": set(),
-        "is_member_based": is_member_based,
-        "target_members": target_members,
-        "start_time": datetime.datetime.now()
-    }
+        # Stocker les informations du giveaway avec l'ID du message comme clé
+        giveaways[giveaway_msg.id] = {
+            "prize": prize,
+            "time": time_seconds,
+            "message": giveaway_msg,
+            "participants": set(),
+            "is_member_based": is_member_based,
+            "target_members": target_members,
+            "start_time": datetime.datetime.now()
+        }
 
-    # Compte à rebours du giveaway
-    remaining_time = time_seconds
-    while remaining_time > 0:
-        # Vérifier si le giveaway a été supprimé manuellement
-        if giveaway_msg.id not in giveaways:
-            return
+        print(f"Giveaway créé avec ID {giveaway_msg.id}, prix: {prize}, durée: {time_seconds} secondes")
 
-        # Vérifier si le nombre de membres cible a été atteint (pour les giveaways basés sur les membres)
-        if is_member_based and ctx.guild.member_count >= target_members:
-            await ctx.send(f"🎊 Le serveur a atteint **{ctx.guild.member_count}** membres ! Le giveaway se termine maintenant !")
-            break
+        # Compte à rebours du giveaway
+        remaining_time = time_seconds
+        update_interval = 5  # Mettre à jour toutes les 5 secondes pour les giveaways courts
 
-        # Attendre 1 seconde
-        remaining_time -= 1
-        await asyncio.sleep(1)
+        if time_seconds > 60:
+            update_interval = 30  # Pour les giveaways plus longs, mettre à jour moins fréquemment
 
-        # Mettre à jour le message périodiquement (moins fréquemment pour éviter les problèmes de rate limit)
-        if remaining_time % 60 == 0 or remaining_time <= 10:
-            try:
-                # Vérifier si le giveaway existe toujours
-                if giveaway_msg.id not in giveaways:
-                    return
+        if time_seconds > 300:  # 5 minutes
+            update_interval = 60  # Pour les giveaways très longs, mettre à jour toutes les minutes
 
-                if is_member_based:
-                    current_members = ctx.guild.member_count
-                    members_needed = target_members - current_members
-                    await giveaway_msg.edit(content=f"🎉 **GIVEAWAY** 🎉\n"
-                                           f"🏆 Prix : {prize}\n"
-                                           f"👥 Se terminera quand le serveur atteindra **{target_members}** membres (actuellement {current_members}, encore {members_needed} membres nécessaires).\n"
-                                           f"🕒 Ou dans {remaining_time} secondes maximum.\n"
-                                           f"Réagis avec 🎉 pour participer !\n"
-                                           f"📌 Utilise le bouton ci-dessous pour obtenir le rôle giveaway et participer !")
-                else:
-                    await giveaway_msg.edit(content=f"🎉 **GIVEAWAY** 🎉\n"
-                                           f"🏆 Prix : {prize}\n"
-                                           f"🕒 Temps restant : {remaining_time} secondes.\n"
-                                           f"Réagis avec 🎉 pour participer !\n"
-                                           f"📌 Utilise le bouton ci-dessous pour obtenir le rôle giveaway et participer !")
-            except discord.NotFound:
-                # Le message a été supprimé
-                if giveaway_msg.id in giveaways:
-                    del giveaways[giveaway_msg.id]
+        last_update_time = remaining_time
+
+        while remaining_time > 0:
+            # Vérifier si le giveaway a été supprimé manuellement
+            if giveaway_msg.id not in giveaways:
+                print(f"Giveaway {giveaway_msg.id} a été supprimé manuellement, arrêt du compte à rebours")
                 return
-            except Exception as e:
-                print(f"Erreur lors de la mise à jour du message de giveaway: {e}")
 
-    # Utiliser la fonction utilitaire pour terminer le giveaway
-    await end_giveaway_with_winner(ctx, giveaway_msg.id)
+            # Vérifier si le nombre de membres cible a été atteint (pour les giveaways basés sur les membres)
+            if is_member_based and ctx.guild.member_count >= target_members:
+                await ctx.send(f"🎊 Le serveur a atteint **{ctx.guild.member_count}** membres ! Le giveaway se termine maintenant !")
+                break
+
+            # Attendre 1 seconde
+            remaining_time -= 1
+            await asyncio.sleep(1)
+
+            # Mettre à jour le message périodiquement ou pour les moments clés
+            time_to_update = (last_update_time - remaining_time >= update_interval) or remaining_time in [60, 30, 10, 5, 3, 2, 1]
+
+            if time_to_update:
+                try:
+                    # Vérifier si le giveaway existe toujours
+                    if giveaway_msg.id not in giveaways:
+                        print(f"Giveaway {giveaway_msg.id} n'existe plus dans le dictionnaire, arrêt de la mise à jour")
+                        return
+
+                    # Compter le nombre de participants
+                    participants_count = len(giveaways[giveaway_msg.id]["participants"])
+
+                    if is_member_based:
+                        current_members = ctx.guild.member_count
+                        members_needed = target_members - current_members
+                        await giveaway_msg.edit(content=f"🎉 **GIVEAWAY** 🎉\n"
+                                               f"🏆 Prix : {prize}\n"
+                                               f"👥 Se terminera quand le serveur atteindra **{target_members}** membres (actuellement {current_members}, encore {members_needed} membres nécessaires).\n"
+                                               f"🕒 Ou dans {remaining_time} secondes maximum.\n"
+                                               f"👤 Participants : {participants_count}\n"
+                                               f"📌 Clique sur le bouton ci-dessous pour participer au giveaway !")
+                    else:
+                        await giveaway_msg.edit(content=f"🎉 **GIVEAWAY** 🎉\n"
+                                               f"🏆 Prix : {prize}\n"
+                                               f"🕒 Temps restant : {remaining_time} secondes.\n"
+                                               f"👤 Participants : {participants_count}\n"
+                                               f"📌 Clique sur le bouton ci-dessous pour participer au giveaway !")
+
+                    last_update_time = remaining_time
+                    print(f"Message de giveaway {giveaway_msg.id} mis à jour, temps restant: {remaining_time} secondes")
+
+                except discord.NotFound:
+                    # Le message a été supprimé
+                    print(f"Message de giveaway {giveaway_msg.id} introuvable, suppression du giveaway")
+                    if giveaway_msg.id in giveaways:
+                        del giveaways[giveaway_msg.id]
+                    return
+                except Exception as e:
+                    print(f"Erreur lors de la mise à jour du message de giveaway: {e}")
+
+        # Vérifier si le giveaway existe toujours avant de le terminer
+        if giveaway_msg.id in giveaways:
+            print(f"Fin du compte à rebours pour le giveaway {giveaway_msg.id}, appel de end_giveaway_with_winner")
+            await end_giveaway_with_winner(ctx, giveaway_msg.id)
+        else:
+            print(f"Le giveaway {giveaway_msg.id} n'existe plus, impossible de le terminer")
+
+    except Exception as e:
+        print(f"Erreur lors de la création ou de l'exécution du giveaway: {e}")
+        await ctx.send(f"❌ Une erreur s'est produite lors de la création du giveaway: {e}")
 
 @bot.command()
 async def endgiveaway(ctx):
@@ -1737,16 +1778,28 @@ async def endgiveaway(ctx):
         await ctx.send("❌ Aucun giveaway en cours !")
         return
 
-    # Prendre le premier giveaway (il ne devrait y en avoir qu'un)
-    giveaway_id = list(giveaways.keys())[0]
+    try:
+        # Prendre le premier giveaway (il ne devrait y en avoir qu'un)
+        giveaway_id = list(giveaways.keys())[0]
 
-    # Terminer le giveaway avec un message personnalisé
-    success = await end_giveaway_with_winner(ctx, giveaway_id, "Terminé manuellement par un administrateur")
+        # Vérifier si le giveaway existe toujours
+        if giveaway_id not in giveaways:
+            await ctx.send("❌ Le giveaway n'existe plus !")
+            return
 
-    if success:
-        await ctx.send("✅ Le giveaway a été terminé avec succès !")
-    else:
-        await ctx.send("❌ Le giveaway n'a pas pu être terminé correctement.")
+        print(f"Fin manuelle du giveaway {giveaway_id} par {ctx.author.name}")
+
+        # Terminer le giveaway avec un message personnalisé
+        success = await end_giveaway_with_winner(ctx, giveaway_id, "Terminé manuellement par un administrateur")
+
+        if success:
+            await ctx.send("✅ Le giveaway a été terminé avec succès !")
+        else:
+            await ctx.send("❌ Le giveaway n'a pas pu être terminé correctement.")
+
+    except Exception as e:
+        await ctx.send(f"❌ Erreur lors de la terminaison du giveaway : {e}")
+        print(f"Erreur lors de la terminaison du giveaway : {e}")
 
 @bot.command()
 async def stopgiveaway(ctx):
@@ -1768,22 +1821,37 @@ async def stopgiveaway(ctx):
         await ctx.send("❌ Aucun giveaway en cours !")
         return
 
-    # Prendre le premier giveaway (il ne devrait y en avoir qu'un)
-    giveaway_id = list(giveaways.keys())[0]
-    giveaway_data = giveaways[giveaway_id]
-    giveaway_msg = giveaway_data["message"]
-    prize = giveaway_data["prize"]
-
-    # Mettre à jour le message du giveaway
     try:
-        await giveaway_msg.edit(content=f"🛑 **GIVEAWAY ANNULÉ** 🛑\n"
-                               f"🏆 Prix : {prize}\n"
-                               f"📝 Raison : Annulé par un administrateur")
+        # Prendre le premier giveaway (il ne devrait y en avoir qu'un)
+        giveaway_id = list(giveaways.keys())[0]
 
-        # Supprimer le giveaway de la liste
+        # Vérifier si le giveaway existe toujours
+        if giveaway_id not in giveaways:
+            await ctx.send("❌ Le giveaway n'existe plus !")
+            return
+
+        giveaway_data = giveaways[giveaway_id]
+        giveaway_msg = giveaway_data["message"]
+        prize = giveaway_data["prize"]
+
+        print(f"Arrêt du giveaway {giveaway_id} par {ctx.author.name}")
+
+        # Supprimer d'abord le giveaway de la liste pour éviter les appels multiples
         del giveaways[giveaway_id]
+        print(f"Giveaway {giveaway_id} supprimé de la liste des giveaways actifs")
 
-        await ctx.send("✅ Le giveaway a été arrêté avec succès !")
+        # Mettre à jour le message du giveaway
+        try:
+            await giveaway_msg.edit(content=f"🛑 **GIVEAWAY ANNULÉ** 🛑\n"
+                                   f"🏆 Prix : {prize}\n"
+                                   f"📝 Raison : Annulé par un administrateur")
+            await ctx.send("✅ Le giveaway a été arrêté avec succès !")
+        except discord.NotFound:
+            await ctx.send("⚠️ Le message du giveaway a été supprimé, mais le giveaway a bien été arrêté.")
+        except Exception as e:
+            await ctx.send(f"⚠️ Erreur lors de la mise à jour du message, mais le giveaway a bien été arrêté: {e}")
+            print(f"Erreur lors de la mise à jour du message de giveaway annulé: {e}")
+
     except Exception as e:
         await ctx.send(f"❌ Erreur lors de l'arrêt du giveaway : {e}")
         print(f"Erreur lors de l'arrêt du giveaway : {e}")

@@ -6,6 +6,7 @@ import os
 import datetime
 from keep_alive import keep_alive
 import json
+from giveaway_role_view import GiveawayRoleView
 
 # Configuration des intents (une seule fois)
 intents = discord.Intents.default()
@@ -1044,6 +1045,11 @@ async def on_ready():
             bot.add_view(ReglementVerificationView())
             print("Vue de vérification par règlement ajoutée avec succès")
 
+            # Ajouter une vue générique pour les boutons de participation au giveaway
+            print("Tentative d'ajout de la vue de participation au giveaway...")
+            bot.add_view(GiveawayRoleView(GIVEAWAY_WINNER_ROLE_ID))
+            print("Vue de participation au giveaway ajoutée avec succès")
+
             bot.persistent_views_added = True
 
             # Vérifier si un message de règlement existe et le mettre à jour
@@ -1625,20 +1631,29 @@ async def giveaway(ctx, time_or_members: str, *, prize: str):
             await ctx.send("❌ Format invalide. Utilisez un nombre de secondes ou `m:nombre` pour spécifier un nombre de membres cible.")
             return
 
-    # Créer le message initial du giveaway
+    # Créer le message initial du giveaway avec un texte supplémentaire pour le bouton
     if is_member_based:
         current_members = ctx.guild.member_count
-        giveaway_msg = await ctx.send(f"🎉 **GIVEAWAY** 🎉\n"
-                                      f"🏆 Prix : {prize}\n"
-                                      f"👥 Se terminera quand le serveur atteindra **{target_members}** membres (actuellement {current_members}).\n"
-                                      f"🕒 Ou dans {time_seconds} secondes maximum.\n"
-                                      f"Réagis avec 🎉 pour participer !")
+        giveaway_content = (f"🎉 **GIVEAWAY** 🎉\n"
+                           f"🏆 Prix : {prize}\n"
+                           f"👥 Se terminera quand le serveur atteindra **{target_members}** membres (actuellement {current_members}).\n"
+                           f"🕒 Ou dans {time_seconds} secondes maximum.\n"
+                           f"Réagis avec 🎉 pour participer !\n"
+                           f"📌 Utilise le bouton ci-dessous pour obtenir le rôle giveaway et participer !")
     else:
-        giveaway_msg = await ctx.send(f"🎉 **GIVEAWAY** 🎉\n"
-                                      f"🏆 Prix : {prize}\n"
-                                      f"🕒 Temps restant : {time_seconds} secondes.\n"
-                                      f"Réagis avec 🎉 pour participer !")
+        giveaway_content = (f"🎉 **GIVEAWAY** 🎉\n"
+                           f"🏆 Prix : {prize}\n"
+                           f"🕒 Temps restant : {time_seconds} secondes.\n"
+                           f"Réagis avec 🎉 pour participer !\n"
+                           f"📌 Utilise le bouton ci-dessous pour obtenir le rôle giveaway et participer !")
 
+    # Créer la vue avec le bouton pour obtenir le rôle giveaway
+    giveaway_view = GiveawayRoleView(GIVEAWAY_WINNER_ROLE_ID)
+
+    # Envoyer le message avec la vue
+    giveaway_msg = await ctx.send(content=giveaway_content, view=giveaway_view)
+
+    # Ajouter la réaction 🎉
     await giveaway_msg.add_reaction("🎉")
 
     # Stocker les informations du giveaway avec l'ID du message comme clé
@@ -1678,12 +1693,14 @@ async def giveaway(ctx, time_or_members: str, *, prize: str):
                                            f"🏆 Prix : {prize}\n"
                                            f"👥 Se terminera quand le serveur atteindra **{target_members}** membres (actuellement {current_members}, encore {members_needed} membres nécessaires).\n"
                                            f"🕒 Ou dans {remaining_time} secondes maximum.\n"
-                                           f"Réagis avec 🎉 pour participer !")
+                                           f"Réagis avec 🎉 pour participer !\n"
+                                           f"📌 Utilise le bouton ci-dessous pour obtenir le rôle giveaway et participer !")
                 else:
                     await giveaway_msg.edit(content=f"🎉 **GIVEAWAY** 🎉\n"
                                            f"🏆 Prix : {prize}\n"
                                            f"🕒 Temps restant : {remaining_time} secondes.\n"
-                                           f"Réagis avec 🎉 pour participer !")
+                                           f"Réagis avec 🎉 pour participer !\n"
+                                           f"📌 Utilise le bouton ci-dessous pour obtenir le rôle giveaway et participer !")
             except discord.NotFound:
                 # Le message a été supprimé
                 if giveaway_msg.id in giveaways:

@@ -1,4 +1,5 @@
 import discord
+import sys
 
 # Classe pour le bouton d'attribution du rôle giveaway
 class GiveawayRoleView(discord.ui.View):
@@ -55,6 +56,29 @@ class GiveawayRoleView(discord.ui.View):
 
             # Vérifier si l'utilisateur a déjà le rôle de participant
             if participant_role in real_interaction.user.roles:
+                # L'utilisateur a déjà le rôle, mais assurons-nous qu'il est dans la liste des participants
+                message_id = real_interaction.message.id
+
+                # Ajouter l'utilisateur à la liste des participants du giveaway
+                try:
+                    # Obtenir le module main
+                    main_module = None
+                    for module_name, module in sys.modules.items():
+                        if hasattr(module, 'giveaways') and module_name != 'giveaway_role_view':
+                            main_module = module
+                            break
+
+                    if main_module and hasattr(main_module, 'giveaways'):
+                        giveaways = main_module.giveaways
+
+                        # Vérifier si le giveaway existe
+                        if message_id in giveaways:
+                            # Ajouter l'utilisateur à la liste des participants
+                            giveaways[message_id]["participants"].add(real_interaction.user)
+                            print(f"Utilisateur {real_interaction.user.name} ajouté aux participants du giveaway {message_id}")
+                except Exception as e:
+                    print(f"Erreur lors de l'ajout de l'utilisateur aux participants: {e}")
+
                 await real_interaction.response.send_message(
                     "✅ Tu participes déjà à ce giveaway !",
                     ephemeral=True
@@ -72,13 +96,13 @@ class GiveawayRoleView(discord.ui.View):
 
             # Attribuer le rôle de participant
             await real_interaction.user.add_roles(participant_role)
+            print(f"Rôle de participant {participant_role.name} ajouté à {real_interaction.user.name}")
 
             # Ajouter l'utilisateur à la liste des participants du giveaway
             message_id = real_interaction.message.id
 
             # Importer le dictionnaire giveaways depuis le module principal
             import sys
-            import importlib.util
 
             # Essayer d'accéder au dictionnaire giveaways du module principal
             try:

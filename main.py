@@ -1523,6 +1523,7 @@ async def end_giveaway_with_winner(ctx, giveaway_id, custom_reason=None):
         await giveaway_msg.edit(content=f"🎉 **GIVEAWAY ANNULÉ** 🎉\n"
                                f"🏆 Prix : {prize}\n"
                                f"📝 Raison : Aucun participant")
+        # Supprimer le giveaway de la liste
         del giveaways[giveaway_id]
         return False
 
@@ -1683,9 +1684,13 @@ async def giveaway(ctx, time_or_members: str, *, prize: str):
         remaining_time -= 1
         await asyncio.sleep(1)
 
-        # Mettre à jour le message périodiquement
-        if remaining_time % 30 == 0 or remaining_time <= 5:
+        # Mettre à jour le message périodiquement (moins fréquemment pour éviter les problèmes de rate limit)
+        if remaining_time % 60 == 0 or remaining_time <= 10:
             try:
+                # Vérifier si le giveaway existe toujours
+                if giveaway_msg.id not in giveaways:
+                    return
+
                 if is_member_based:
                     current_members = ctx.guild.member_count
                     members_needed = target_members - current_members
@@ -1782,10 +1787,6 @@ async def stopgiveaway(ctx):
     except Exception as e:
         await ctx.send(f"❌ Erreur lors de l'arrêt du giveaway : {e}")
         print(f"Erreur lors de l'arrêt du giveaway : {e}")
-
-    # Supprimer les informations du giveaway
-    if giveaway_msg.id in giveaways:
-        del giveaways[giveaway_msg.id]
 
 # Commandes de modération
 @bot.command()

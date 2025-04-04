@@ -1,4 +1,5 @@
 import discord
+from discord import errors as discord_errors
 import sys
 
 # Classe pour le bouton d'attribution du rôle giveaway
@@ -30,10 +31,19 @@ class GiveawayRoleView(discord.ui.View):
             # Vérifier si l'utilisateur a déjà le rôle de gagnant
             winner_role = discord.utils.get(real_interaction.guild.roles, id=self.winner_role_id)
             if winner_role and winner_role in real_interaction.user.roles:
-                await real_interaction.response.send_message(
-                    "❌ Tu as déjà gagné un giveaway précédent. Tu ne peux pas participer à ce giveaway.",
-                    ephemeral=True
-                )
+                try:
+                    await real_interaction.response.send_message(
+                        "❌ Tu as déjà gagné un giveaway précédent. Tu ne peux pas participer à ce giveaway.",
+                        ephemeral=True
+                    )
+                except discord_errors.InteractionResponded:
+                    try:
+                        await real_interaction.followup.send(
+                            "❌ Tu as déjà gagné un giveaway précédent. Tu ne peux pas participer à ce giveaway.",
+                            ephemeral=True
+                        )
+                    except Exception as e:
+                        print(f"Erreur lors de l'envoi du message de suivi: {e}")
                 return
 
             # Rechercher le rôle de participant au giveaway
@@ -46,10 +56,19 @@ class GiveawayRoleView(discord.ui.View):
                 available_roles = [f"{r.name} (ID: {r.id})" for r in real_interaction.guild.roles]
                 print(f"Rôles disponibles: {', '.join(available_roles)}")
 
-                await real_interaction.response.send_message(
-                    "❌ Le rôle de participant est introuvable. Contacte un administrateur.",
-                    ephemeral=True
-                )
+                try:
+                    await real_interaction.response.send_message(
+                        "❌ Le rôle de participant est introuvable. Contacte un administrateur.",
+                        ephemeral=True
+                    )
+                except discord_errors.InteractionResponded:
+                    try:
+                        await real_interaction.followup.send(
+                            "❌ Le rôle de participant est introuvable. Contacte un administrateur.",
+                            ephemeral=True
+                        )
+                    except Exception as e:
+                        print(f"Erreur lors de l'envoi du message de suivi: {e}")
                 return
 
             print(f"✅ Rôle de participant trouvé: {participant_role.name} (ID: {participant_role.id})")
@@ -58,7 +77,7 @@ class GiveawayRoleView(discord.ui.View):
             if participant_role in real_interaction.user.roles:
                 # L'utilisateur a déjà le rôle, mais assurons-nous qu'il est dans la liste des participants
                 message_id = real_interaction.message.id
-
+                
                 # Ajouter l'utilisateur à la liste des participants du giveaway
                 try:
                     # Obtenir le module main
@@ -67,10 +86,10 @@ class GiveawayRoleView(discord.ui.View):
                         if hasattr(module, 'giveaways') and module_name != 'giveaway_role_view':
                             main_module = module
                             break
-
+                    
                     if main_module and hasattr(main_module, 'giveaways'):
                         giveaways = main_module.giveaways
-
+                        
                         # Vérifier si le giveaway existe
                         if message_id in giveaways:
                             # Ajouter l'utilisateur à la liste des participants
@@ -78,20 +97,38 @@ class GiveawayRoleView(discord.ui.View):
                             print(f"Utilisateur {real_interaction.user.name} ajouté aux participants du giveaway {message_id}")
                 except Exception as e:
                     print(f"Erreur lors de l'ajout de l'utilisateur aux participants: {e}")
-
-                await real_interaction.response.send_message(
-                    "✅ Tu participes déjà à ce giveaway !",
-                    ephemeral=True
-                )
+                
+                try:
+                    await real_interaction.response.send_message(
+                        "✅ Tu participes déjà à ce giveaway !",
+                        ephemeral=True
+                    )
+                except discord_errors.InteractionResponded:
+                    try:
+                        await real_interaction.followup.send(
+                            "✅ Tu participes déjà à ce giveaway !",
+                            ephemeral=True
+                        )
+                    except Exception as e:
+                        print(f"Erreur lors de l'envoi du message de suivi: {e}")
                 return
 
             # Vérifier la hiérarchie des rôles
             bot_member = real_interaction.guild.get_member(real_interaction.client.user.id)
             if bot_member.top_role.position <= participant_role.position:
-                await real_interaction.response.send_message(
-                    "❌ Je n'ai pas la permission d'attribuer ce rôle. Contacte un administrateur.",
-                    ephemeral=True
-                )
+                try:
+                    await real_interaction.response.send_message(
+                        "❌ Je n'ai pas la permission d'attribuer ce rôle. Contacte un administrateur.",
+                        ephemeral=True
+                    )
+                except discord_errors.InteractionResponded:
+                    try:
+                        await real_interaction.followup.send(
+                            "❌ Je n'ai pas la permission d'attribuer ce rôle. Contacte un administrateur.",
+                            ephemeral=True
+                        )
+                    except Exception as e:
+                        print(f"Erreur lors de l'envoi du message de suivi: {e}")
                 return
 
             # Attribuer le rôle de participant
@@ -100,10 +137,7 @@ class GiveawayRoleView(discord.ui.View):
 
             # Ajouter l'utilisateur à la liste des participants du giveaway
             message_id = real_interaction.message.id
-
-            # Importer le dictionnaire giveaways depuis le module principal
-            import sys
-
+            
             # Essayer d'accéder au dictionnaire giveaways du module principal
             try:
                 # Obtenir le module main
@@ -112,10 +146,10 @@ class GiveawayRoleView(discord.ui.View):
                     if hasattr(module, 'giveaways') and module_name != 'giveaway_role_view':
                         main_module = module
                         break
-
+                
                 if main_module and hasattr(main_module, 'giveaways'):
                     giveaways = main_module.giveaways
-
+                    
                     # Vérifier si le giveaway existe
                     if message_id in giveaways:
                         # Ajouter l'utilisateur à la liste des participants
@@ -127,19 +161,48 @@ class GiveawayRoleView(discord.ui.View):
                 print(f"Erreur lors de l'ajout de l'utilisateur aux participants: {e}")
 
             # Confirmer à l'utilisateur
-            await real_interaction.response.send_message(
-                f"✅ Tu participes maintenant au giveaway ! Bonne chance !",
-                ephemeral=True
-            )
+            try:
+                await real_interaction.response.send_message(
+                    f"✅ Tu participes maintenant au giveaway ! Bonne chance !",
+                    ephemeral=True
+                )
+            except discord_errors.InteractionResponded:
+                try:
+                    await real_interaction.followup.send(
+                        f"✅ Tu participes maintenant au giveaway ! Bonne chance !",
+                        ephemeral=True
+                    )
+                except Exception as e:
+                    print(f"Erreur lors de l'envoi du message de confirmation: {e}")
 
         except discord.Forbidden:
-            await real_interaction.response.send_message(
-                "❌ Je n'ai pas la permission d'attribuer ce rôle. Contacte un administrateur.",
-                ephemeral=True
-            )
+            try:
+                await real_interaction.response.send_message(
+                    "❌ Je n'ai pas la permission d'attribuer ce rôle. Contacte un administrateur.",
+                    ephemeral=True
+                )
+            except discord_errors.InteractionResponded:
+                # L'interaction a déjà reçu une réponse
+                try:
+                    await real_interaction.followup.send(
+                        "❌ Je n'ai pas la permission d'attribuer ce rôle. Contacte un administrateur.",
+                        ephemeral=True
+                    )
+                except Exception as e2:
+                    print(f"Erreur lors de l'envoi du message de suivi: {e2}")
         except Exception as e:
             print(f"Erreur lors de l'attribution du rôle de participant: {e}")
-            await real_interaction.response.send_message(
-                "❌ Une erreur s'est produite. Contacte un administrateur.",
-                ephemeral=True
-            )
+            try:
+                await real_interaction.response.send_message(
+                    "❌ Une erreur s'est produite. Contacte un administrateur.",
+                    ephemeral=True
+                )
+            except discord_errors.InteractionResponded:
+                # L'interaction a déjà reçu une réponse
+                try:
+                    await real_interaction.followup.send(
+                        "❌ Une erreur s'est produite. Contacte un administrateur.",
+                        ephemeral=True
+                    )
+                except Exception as e2:
+                    print(f"Erreur lors de l'envoi du message de suivi: {e2}")

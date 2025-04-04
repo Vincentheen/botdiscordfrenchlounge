@@ -1050,7 +1050,7 @@ async def on_ready():
 
             # Ajouter une vue générique pour les boutons de participation au giveaway
             print("Tentative d'ajout de la vue de participation au giveaway...")
-            bot.add_view(GiveawayRoleView(GIVEAWAY_WINNER_ROLE_ID))
+            bot.add_view(GiveawayRoleView(GIVEAWAY_PARTICIPANT_ROLE_ID, GIVEAWAY_WINNER_ROLE_ID))
             print("Vue de participation au giveaway ajoutée avec succès")
 
             bot.persistent_views_added = True

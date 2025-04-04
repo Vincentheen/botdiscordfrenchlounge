@@ -167,7 +167,7 @@ role_permissions = {
         "commands": [
             "kick", "mute", "unmute", "warn", "clearwarns", "clear",
             "addrole", "removerole", "addword", "removeword", "listwords",
-            "renameticket", "addmember", "removemember", "listtickets"
+            "renameticket", "addmember", "removemember", "listtickets", "annonce"
         ],
         "description": "Modérateurs du serveur"
     },
@@ -2027,6 +2027,136 @@ async def warn(ctx,
                reason=f"A atteint {warnings[member.id]} avertissements")
         warnings[member.id] = 0
 
+
+# Commande pour afficher la liste des commandes disponibles
+@bot.command()
+async def commands(ctx):
+    """Affiche la liste des commandes disponibles."""
+    # Vérifier si l'utilisateur est un membre du staff
+    is_staff = any(discord.utils.get(ctx.guild.roles, id=role_id) in ctx.author.roles
+                  for role_id in [OWNER_ROLE_ID, ADMIN_ROLE_ID, MOD_ROLE_ID, HELPER_ROLE_ID])
+
+    # Créer l'embed pour les commandes
+    embed = discord.Embed(
+        title="📋 Liste des commandes",
+        description="Voici la liste des commandes disponibles sur le serveur.",
+        color=discord.Color.blue()
+    )
+
+    # Commandes de base (accessibles à tous)
+    embed.add_field(
+        name="🔍 Commandes d'information",
+        value="```\n!serverinfo - Informations sur le serveur\n"
+              "!userinfo [@utilisateur] - Informations sur un utilisateur\n"
+              "!avatar [@utilisateur] - Afficher l'avatar d'un utilisateur\n"
+              "!commands - Afficher cette liste de commandes\n```",
+        inline=False
+    )
+
+    # Commandes de tickets (accessibles à tous)
+    embed.add_field(
+        name="🎫 Système de tickets",
+        value="```\n!ticket - Créer un ticket\n```",
+        inline=False
+    )
+
+    # Commandes de modération (accessibles au staff uniquement)
+    if is_staff:
+        embed.add_field(
+            name="🛡️ Modération",
+            value="```\n!ban @utilisateur [raison] - Bannir un utilisateur\n"
+                  "!unban ID_utilisateur - Débannir un utilisateur\n"
+                  "!kick @utilisateur [raison] - Expulser un utilisateur\n"
+                  "!mute @utilisateur [durée] [raison] - Rendre muet un utilisateur\n"
+                  "!unmute @utilisateur - Rendre la parole à un utilisateur\n"
+                  "!clear [nombre] - Supprimer des messages\n"
+                  "!warn @utilisateur [raison] - Avertir un utilisateur\n"
+                  "!warnings @utilisateur - Voir les avertissements d'un utilisateur\n"
+                  "!clearwarns @utilisateur - Effacer les avertissements d'un utilisateur\n"
+                  "!annonce [message] - Envoyer une annonce formatée\n```",
+            inline=False
+        )
+
+        embed.add_field(
+            name="🏷️ Gestion des rôles",
+            value="```\n!addrole @utilisateur @rôle - Ajouter un rôle à un utilisateur\n"
+                  "!removerole @utilisateur @rôle - Retirer un rôle à un utilisateur\n```",
+            inline=False
+        )
+
+        embed.add_field(
+            name="🎫 Gestion des tickets",
+            value="```\n!renameticket <nouveau_nom> - Renommer un ticket\n"
+                  "!addmember @utilisateur - Ajouter un membre à un ticket\n"
+                  "!removemember @utilisateur - Retirer un membre d'un ticket\n"
+                  "!listtickets - Afficher la liste des tickets actifs\n```",
+            inline=False
+        )
+
+        embed.add_field(
+            name="📜 Gestion du règlement",
+            value="```\n!setupreglement [#canal] - Configurer le canal de règlement\n"
+                  "!addrule <texte> - Ajouter une règle\n"
+                  "!removerule <numéro> - Supprimer une règle\n"
+                  "!editrule <numéro> <texte> - Modifier une règle\n"
+                  "!showrules - Afficher les règles\n"
+                  "!setbanner [url] - Changer la bannière\n"
+                  "!resetrules - Réinitialiser les règles\n```",
+            inline=False
+        )
+
+        embed.add_field(
+            name="🎁 Giveaway",
+            value="```\n!giveaway <durée> <prix> - Créer un giveaway\n"
+                  "!reroll <message_id> - Relancer un giveaway\n"
+                  "!endgiveaway <message_id> - Terminer un giveaway\n```",
+            inline=False
+        )
+
+    # Ajouter un footer avec des informations supplémentaires
+    embed.set_footer(text="Pour plus d'informations sur une commande, utilisez !help <commande>")
+
+    # Envoyer l'embed
+    await ctx.send(embed=embed)
+
+# Commande pour faire une annonce
+@bot.command()
+async def annonce(ctx, *, message: str = None):
+    """Envoie une annonce formatée dans le canal actuel."""
+    # Vérifier les permissions (seuls les modérateurs et administrateurs peuvent faire des annonces)
+    if not has_permission(ctx.author, "annonce"):
+        await ctx.send("❌ Tu n'as pas la permission de faire des annonces.")
+        return
+
+    # Vérifier si un message a été fourni
+    if not message:
+        await ctx.send("❌ Tu dois spécifier un message pour l'annonce. Exemple: `!annonce Bonjour à tous !`")
+        return
+
+    # Supprimer la commande originale
+    try:
+        await ctx.message.delete()
+    except:
+        pass  # Ignorer si la suppression échoue
+
+    # Créer l'embed pour l'annonce
+    embed = discord.Embed(
+        title="📢 Annonce",
+        description=message,
+        color=discord.Color.blue()
+    )
+
+    # Ajouter le bot comme auteur de l'annonce
+    embed.set_author(name=bot.user.name, icon_url=bot.user.display_avatar.url)
+
+    # Ajouter la date et l'heure
+    embed.set_footer(text=f"Annonce publiée le {datetime.datetime.now().strftime('%d/%m/%Y à %H:%M')}")
+
+    # Envoyer l'annonce
+    await ctx.send(embed=embed)
+
+    # Enregistrer l'action dans les logs
+    await log_action(ctx, "Annonce", None, reason=f"Annonce publiée dans #{ctx.channel.name}")
 
 # Commandes de gestion des rôles
 @bot.command()

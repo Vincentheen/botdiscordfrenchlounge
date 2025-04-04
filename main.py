@@ -32,6 +32,9 @@ CUSTOM_ROLES = {}  # Format: {"nom_du_role": {"id": role_id, "permissions": [lis
 
 ROLE_JOIN_ID = 1357113117561192478
 GIVEAWAY_WINNER_ROLE_ID = 1357113189762076692
+# Vous devez créer un nouveau rôle "Participant Giveaway" sur votre serveur Discord
+# et remplacer cet ID par l'ID du nouveau rôle
+GIVEAWAY_PARTICIPANT_ROLE_ID = 1357113117561192478  # Utilisation temporaire du ROLE_JOIN_ID
 AUTO_ROLE_ID = 1354904148570542273
 WELCOME_CHANNEL_ID = 1357046834874421496
 GUILD_ID = 1354892680722911405 # ID du serveur
@@ -1550,27 +1553,36 @@ async def end_giveaway_with_winner(ctx, giveaway_id, custom_reason=None):
         print(f"Erreur lors de la mise à jour du message de giveaway terminé: {e}")
 
     # Utiliser directement les variables globales
-    role_join_id = ROLE_JOIN_ID
-    giveaway_winner_role_id = GIVEAWAY_WINNER_ROLE_ID
+    participant_role_id = GIVEAWAY_PARTICIPANT_ROLE_ID
+    winner_role_id = GIVEAWAY_WINNER_ROLE_ID
 
-    # Ajout et retrait de rôles au gagnant
-    role_to_remove = discord.utils.get(winner.guild.roles, id=role_join_id) if role_join_id else None
-    role_to_add = discord.utils.get(winner.guild.roles, id=giveaway_winner_role_id) if giveaway_winner_role_id else None
+    # Récupérer les rôles
+    participant_role = discord.utils.get(winner.guild.roles, id=participant_role_id) if participant_role_id else None
+    winner_role = discord.utils.get(winner.guild.roles, id=winner_role_id) if winner_role_id else None
 
-    if role_to_remove and role_to_add:
+    if participant_role and winner_role:
         try:
             # Vérifier si le rôle du bot est plus haut dans la hiérarchie
             bot_member = winner.guild.get_member(bot.user.id)
             bot_top_role = bot_member.top_role
 
-            if bot_top_role.position <= role_to_remove.position or bot_top_role.position <= role_to_add.position:
+            if bot_top_role.position <= participant_role.position or bot_top_role.position <= winner_role.position:
                 error_msg = f"Erreur : Le rôle du bot ({bot_top_role.name}) est plus bas que les rôles à modifier."
                 print(error_msg)
                 await ctx.send(f"⚠️ **Erreur de permission** : {error_msg}")
-            else:
-                await winner.remove_roles(role_to_remove)
-                await winner.add_roles(role_to_add)
-                print(f"Le rôle {role_to_remove.name} a été retiré et {role_to_add.name} ajouté à {winner.name}.")
+    # Retirer le rôle de participant à tous les participants
+                for participant in current_giveaway["participants"]:
+                    try:
+                        if participant_role in participant.roles:
+                            await participant.remove_roles(participant_role)
+               else:
+                                     print(f"Rôle de participant retiré à {participant.name}")
+                    except Exception as e:
+                        print(f"Erreur lors du retrait du rôle de participant à {participant.name}: {e}")
+
+                # Ajouter le rôle de gagnant au gagnant
+                await winner.add_roles(winner_role)
+                print(f"Rôle de gagnant {winner_role.name} ajouté à {winner.name}.")
         except Exception as e:
             print(f"Erreur lors de la modification des rôles: {e}")
             await ctx.send(f"⚠️ Erreur lors de l'attribution des rôles au gagnant: {e}")
@@ -1660,8 +1672,9 @@ async def giveaway(ctx, time_or_members: str, *, prize: str):
         # Envoyer d'abord le message pour obtenir son ID
         giveaway_msg = await ctx.send(content=giveaway_content)
 
-        # Créer la vue avec le bouton pour obtenir le rôle giveaway et participer
-        giveaway_view = GiveawayRoleView(GIVEAWAY_WINNER_ROLE_ID, giveaway_msg.id)
+        # Créer la vue avec le bouton pour obtenir le rôle de participant et participer
+        # Passer à la fois l'ID du rôle de participant et l'ID du rôle de gagnant
+        giveaway_view = GiveawayRoleView(GIVEAWAY_PARTICIPANT_ROLE_ID, GIVEAWAY_WINNER_ROLE_ID, giveaway_msg.id)
 
         # Mettre à jour le message avec la vue
         await giveaway_msg.edit(content=giveaway_content, view=giveaway_view)

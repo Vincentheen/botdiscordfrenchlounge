@@ -2,9 +2,10 @@ import discord
 
 # Classe pour le bouton d'attribution du rôle giveaway
 class GiveawayRoleView(discord.ui.View):
-    def __init__(self, giveaway_role_id, giveaway_id=None):
+    def __init__(self, participant_role_id, winner_role_id, giveaway_id=None):
         super().__init__(timeout=None)  # Pas de timeout pour que le bouton reste actif
-        self.giveaway_role_id = giveaway_role_id
+        self.participant_role_id = participant_role_id
+        self.winner_role_id = winner_role_id
         self.giveaway_id = giveaway_id  # ID du message de giveaway pour accéder au dictionnaire giveaways
 
     @discord.ui.button(label="🎁 Participer au giveaway",
@@ -25,26 +26,35 @@ class GiveawayRoleView(discord.ui.View):
         print(f"Utilisateur: {real_interaction.user.name} (ID: {real_interaction.user.id})")
 
         try:
-            # Rechercher le rôle giveaway
-            print(f"Recherche du rôle giveaway (ID: {self.giveaway_role_id}) dans le serveur {real_interaction.guild.name}")
-            role = discord.utils.get(real_interaction.guild.roles, id=self.giveaway_role_id)
+            # Vérifier si l'utilisateur a déjà le rôle de gagnant
+            winner_role = discord.utils.get(real_interaction.guild.roles, id=self.winner_role_id)
+            if winner_role and winner_role in real_interaction.user.roles:
+                await real_interaction.response.send_message(
+                    "❌ Tu as déjà gagné un giveaway précédent. Tu ne peux pas participer à ce giveaway.",
+                    ephemeral=True
+                )
+                return
 
-            if not role:
-                print(f"❌ Rôle giveaway introuvable dans le serveur {real_interaction.guild.name}")
+            # Rechercher le rôle de participant au giveaway
+            print(f"Recherche du rôle de participant (ID: {self.participant_role_id}) dans le serveur {real_interaction.guild.name}")
+            participant_role = discord.utils.get(real_interaction.guild.roles, id=self.participant_role_id)
+
+            if not participant_role:
+                print(f"❌ Rôle de participant introuvable dans le serveur {real_interaction.guild.name}")
                 # Afficher tous les rôles disponibles pour le débogage
                 available_roles = [f"{r.name} (ID: {r.id})" for r in real_interaction.guild.roles]
                 print(f"Rôles disponibles: {', '.join(available_roles)}")
 
                 await real_interaction.response.send_message(
-                    "❌ Le rôle giveaway est introuvable. Contacte un administrateur.",
+                    "❌ Le rôle de participant est introuvable. Contacte un administrateur.",
                     ephemeral=True
                 )
                 return
 
-            print(f"✅ Rôle giveaway trouvé: {role.name} (ID: {role.id})")
+            print(f"✅ Rôle de participant trouvé: {participant_role.name} (ID: {participant_role.id})")
 
-            # Vérifier si l'utilisateur a déjà le rôle
-            if role in real_interaction.user.roles:
+            # Vérifier si l'utilisateur a déjà le rôle de participant
+            if participant_role in real_interaction.user.roles:
                 await real_interaction.response.send_message(
                     "✅ Tu participes déjà à ce giveaway !",
                     ephemeral=True
@@ -53,15 +63,15 @@ class GiveawayRoleView(discord.ui.View):
 
             # Vérifier la hiérarchie des rôles
             bot_member = real_interaction.guild.get_member(real_interaction.client.user.id)
-            if bot_member.top_role.position <= role.position:
+            if bot_member.top_role.position <= participant_role.position:
                 await real_interaction.response.send_message(
                     "❌ Je n'ai pas la permission d'attribuer ce rôle. Contacte un administrateur.",
                     ephemeral=True
                 )
                 return
 
-            # Attribuer le rôle
-            await real_interaction.user.add_roles(role)
+            # Attribuer le rôle de participant
+            await real_interaction.user.add_roles(participant_role)
 
             # Ajouter l'utilisateur à la liste des participants du giveaway
             message_id = real_interaction.message.id
@@ -104,7 +114,7 @@ class GiveawayRoleView(discord.ui.View):
                 ephemeral=True
             )
         except Exception as e:
-            print(f"Erreur lors de l'attribution du rôle giveaway: {e}")
+            print(f"Erreur lors de l'attribution du rôle de participant: {e}")
             await real_interaction.response.send_message(
                 "❌ Une erreur s'est produite. Contacte un administrateur.",
                 ephemeral=True
